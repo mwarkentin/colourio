@@ -1,5 +1,5 @@
 var x = 0,
-    y = 75,
+    y = 1,
     width = 480,
     height = 320,
     sampleSize = 1;
@@ -15,13 +15,16 @@ sample.src = 'sample-image.jpeg';
 sample.onload = function() {
 	sourceContext.drawImage(sample, 0, 0, sourceCanvas.width, sourceCanvas.height);
 	drawToDestination(y);
-	drawSampleLine(y);
 };
 
-$(sourceCanvas).on('click', function(e) {
-	var yClick = e.y - e.target.offsetTop;
-	drawToDestination(yClick);
-	drawSampleLine(yClick);
+$(sourceCanvas).on({
+	mousemove: function(e) {
+		var y = e.y - e.target.offsetTop;
+		drawToDestination(y);
+	},
+	click: function(e) {
+		console.log('clone canvas');
+	}
 });
 
 var drawToDestination = function(y) {
