@@ -3,20 +3,25 @@ var $ = function(el) {
 };
 
 var x = 0,
-    y = 50,
+    y = 75,
     width = 480,
     height = 320,
     sampleSize = 1;
 
-var sourceImage = $('SourceImage');
-console.log(sourceImage);
-var context = sourceImage.getContext('2d');
-var source = new Image();
-source.src = 'sample-image.jpeg';
-source.onload = function() {
-	context.drawImage(source, 0, 0, sourceImage.width, sourceImage.height);
-	for (x=0; x < sourceImage.width; x++) {
-		console.log(x, y);
-		console.log(context.getImageData(x, y, sampleSize, sampleSize));
+var sourceCanvas = $('Source'),
+    destinationCanvas = $('Destination');
+
+var sourceContext = sourceCanvas.getContext('2d'),
+    destinationContext = destinationCanvas.getContext('2d');
+
+var sample = new Image();
+sample.src = 'sample-image.jpeg';
+sample.onload = function() {
+	sourceContext.drawImage(sample, 0, 0, sourceCanvas.width, sourceCanvas.height);
+	for (x=0; x < sourceCanvas.width; x++) {
+		pixelData = sourceContext.getImageData(x, y, sampleSize, sampleSize);
+		for (var yy = 0; yy < destinationCanvas.height; yy++) {
+			destinationContext.putImageData(pixelData, x, yy);
+		}
 	}
 };
