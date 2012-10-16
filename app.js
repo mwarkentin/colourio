@@ -23,7 +23,8 @@ $(sourceCanvas).on({
 		drawToDestination(y);
 	},
 	click: function(e) {
-		console.log('clone canvas');
+		var img = generatePng(destinationCanvas);
+		$('body').append(img);
 	}
 });
 
@@ -40,4 +41,10 @@ var drawSampleLine = function(y) {
 	sourceContext.lineTo(width, y);
 	sourceContext.closePath();
 	sourceContext.stroke();
+};
+
+var generatePng = function(canvas) {
+	var img = new Image();
+	img.src = canvas.toDataURL();
+	return img;
 };
