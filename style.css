@@ -380,6 +380,15 @@ table {
 
 /* ========================================================================== */
 
+#DropTarget {
+	text-align: center;
+	padding: 20px;
+	background-color: #F6F6F6;
+	border: 1px dashed #666;
+	border-radius: 6px;
+	margin-bottom: 20px;
+}
+
 canvas {
 	width: 480px;
 	height: 320px;
