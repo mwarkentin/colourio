@@ -5,18 +5,33 @@
         <link rel="stylesheet" href="style.css" />
     </head>
     <body>
+        <div id="DropTarget">Drop image here</div>
+        <hr>
         <canvas id="Source" width="480" height="320"></canvas>
         <canvas id="Destination" width="480" height="320"></canvas>
 
         <script type="text/javascript" src="zepto.js"></script>
 
         <!-- Adds the Filepicker.io javascript library to the page -->
-        <script src="https://api.filepicker.io/v0/filepicker.js"></script>
+        <script src="//api.filepicker.io/v1/filepicker.js"></script>
         <script type="text/javascript">
             //Seting up Filepicker.io with your api key
             filepicker.setKey('AuGBHW91tR1aWrlIS0_xiz');
         </script>
 
         <script type="text/javascript" src="app.js"></script>
+
+        <script type="text/javascript">
+            var dropTarget = $('#DropTarget')[0];
+            filepicker.makeDropPane(dropTarget, {
+                'mimetype': 'image/*',
+                'maxSize': 10 * 1024 * 1024,
+                'dragEnter': handleDragEnter,
+                'dragLeave': handleDragLeave,
+                'onStart': handleOnStart,
+                'onSuccess': handleOnSuccess,
+                'onProgress': handleOnProgress
+            });
+        </script>
     </body>
 </html>
