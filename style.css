@@ -390,7 +390,5 @@ table {
 }
 
 canvas {
-	width: 480px;
-	height: 320px;
 	position: relative;
 }

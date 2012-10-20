@@ -1,14 +1,14 @@
-var x = 0,
-    y = 1,
-    width = 480,
-    height = 320,
-    sampleSize = 1;
-
 var sourceCanvas = $('#Source')[0],
     destinationCanvas = $('#Destination')[0];
 
 var sourceContext = sourceCanvas.getContext('2d'),
     destinationContext = destinationCanvas.getContext('2d');
+
+var x = 0,
+    y = 1,
+    width = sourceCanvas.width,
+    height = sourceCanvas.height,
+    sampleSize = 1;
 
 var sourceImage = new Image();
 sourceImage.src = 'sample-image.jpeg';
