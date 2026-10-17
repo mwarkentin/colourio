@@ -16,6 +16,7 @@
         openBtn: $('openBtn'),
         emptyOpenBtn: $('emptyOpenBtn'),
         downloadBtn: $('downloadBtn'),
+        printBtn: $('printBtn'),
         snapshotBtn: $('snapshotBtn'),
         cssBtn: $('cssBtn'),
         stage: $('stage'),
@@ -211,7 +212,7 @@
         els.readout.hidden = false;
         els.preview.hidden = false;
         els.previewPlaceholder.hidden = true;
-        [els.downloadBtn, els.snapshotBtn, els.cssBtn].forEach(function (btn) { btn.disabled = false; });
+        [els.downloadBtn, els.snapshotBtn, els.cssBtn, els.printBtn].forEach(function (btn) { btn.disabled = false; });
 
         layout();
         render();
@@ -704,6 +705,7 @@
             }
             return;
         }
+        if (document.querySelector('dialog[open]')) { return; }
         if (e.metaKey || e.ctrlKey || e.altKey || tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') { return; }
         if (e.key === 's' || e.key === 'S') {
             e.preventDefault();
@@ -1076,6 +1078,18 @@
         }
     }).observe(els.stage);
     window.addEventListener('resize', layout);
+
+    // Lets print.js render the current stripes at print sizes.
+    window.colourio = {
+        render: function (width, height) {
+            return state.pixels ? paint(document.createElement('canvas'), width, height, sampleLine()) : null;
+        },
+        describe: function () {
+            var sample = sampleLine();
+            return { name: state.name, direction: state.direction, position: sample.start + 1 };
+        },
+        toast: toast
+    };
 
     loadImage(SAMPLE_IMAGE, 'sample');
 })();

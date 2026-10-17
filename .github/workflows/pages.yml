@@ -30,14 +30,14 @@ jobs:
       - name: Collect site files
         run: |
           mkdir _site
-          cp index.html app.js style.css sample-image.jpeg _site/
+          cp index.html app.js print.js style.css sample-image.jpeg _site/
 
       # Pages lets browsers cache files for 10 minutes; versioning the asset
       # URLs stops new HTML from loading a stale stylesheet or script.
       - name: Version asset URLs
         run: |
-          sed -i -E "s/(href=\"style\.css|src=\"app\.js)\"/\1?v=${GITHUB_SHA::8}\"/" _site/index.html
-          grep -E "style\.css\?v=|app\.js\?v=" _site/index.html
+          sed -i -E "s/(href=\"[^\"]+\.css|src=\"[^\"]+\.js)\"/\1?v=${GITHUB_SHA::8}\"/g" _site/index.html
+          grep -E "\.(css|js)\?v=" _site/index.html
 
       - uses: actions/upload-pages-artifact@v3
         with:
