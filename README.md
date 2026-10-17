@@ -2,6 +2,8 @@
 
 Turn a single line of pixels from any image into a colour-stripe wallpaper.
 
+**Live at <https://mwarkentin.github.io/colourio/>**
+
 Move over the source image to pick a row (or column) of pixels; colourio
 stretches it across the whole output. Click to lock the line, then download
 the result as a PNG, save snapshots, copy palette colours, or copy the line as
@@ -18,6 +20,13 @@ python3 -m http.server
 
 Then open <http://localhost:8000>. Opening `index.html` directly works too,
 but you'll need to load your own image (drop, paste, or browse).
+
+## Deploying
+
+Every push to `master` deploys the site to GitHub Pages via
+`.github/workflows/pages.yml`. Only the files the page needs are published;
+add any new site files to the "Collect site files" step. You can also run the
+workflow by hand from the Actions tab.
 
 ## Controls
 
