@@ -860,6 +860,208 @@ input[type="range"]:focus-visible::-moz-range-thumb {
     border-top: 1px solid var(--border);
 }
 
+.btn-print {
+    grid-column: 1 / -1;
+}
+
+/* ==========================================================================
+   Print dialog
+   ========================================================================== */
+
+.print-dialog {
+    width: min(560px, calc(100vw - 32px));
+    max-height: calc(100vh - 32px);
+    padding: 0;
+    overflow: auto;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--panel);
+    box-shadow: var(--shadow);
+    color: var(--text);
+}
+
+.print-dialog::backdrop {
+    background: rgba(10, 10, 12, 0.55);
+    -webkit-backdrop-filter: blur(4px);
+    backdrop-filter: blur(4px);
+}
+
+.print-dialog[open] {
+    animation: pop-in 0.2s ease-out;
+}
+
+.print-sheet {
+    display: grid;
+    gap: 16px;
+    padding: 20px;
+}
+
+.print-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.print-head h2 {
+    margin: 0;
+    font-size: 17px;
+    font-weight: 650;
+}
+
+.print-intro {
+    margin: -8px 0 0;
+    color: var(--muted);
+}
+
+.print-products {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+}
+
+@media (max-width: 560px) {
+    .print-sheet {
+        padding: 16px;
+    }
+
+    .print-products {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+.print-product {
+    position: relative;
+    display: grid;
+    justify-items: center;
+    gap: 2px;
+    padding: 12px 10px 10px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--panel-2);
+    cursor: pointer;
+    transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.print-product:hover {
+    border-color: var(--border-strong);
+}
+
+.print-product input {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+}
+
+.print-product:has(input:checked) {
+    border-color: var(--accent);
+    box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+.print-product:has(input:focus-visible) {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+}
+
+.print-frame {
+    display: grid;
+    place-items: center;
+    width: 100%;
+    height: 88px;
+    margin-bottom: 6px;
+}
+
+.print-thumb {
+    display: block;
+    border-radius: 3px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.print-name {
+    font-weight: 600;
+}
+
+.print-size {
+    color: var(--muted);
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+}
+
+.print-demo {
+    padding: 10px 12px;
+    border: 1px dashed var(--border-strong);
+    border-radius: var(--radius-sm);
+    color: var(--muted);
+    font-size: 13px;
+}
+
+.print-demo strong {
+    color: var(--text);
+}
+
+.print-status:empty {
+    display: none;
+}
+
+.print-status {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    font-variant-numeric: tabular-nums;
+}
+
+.print-status[data-kind="busy"]::before {
+    content: "";
+    width: 14px;
+    height: 14px;
+    border: 2px solid var(--border-strong);
+    border-top-color: var(--text);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+.print-status[data-kind="error"] {
+    color: #e5484d;
+}
+
+.print-link {
+    display: grid;
+    gap: 4px;
+}
+
+.print-link .label {
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.print-link code {
+    display: block;
+    max-height: 84px;
+    padding: 8px 10px;
+    border-radius: 8px;
+    background: var(--panel-2);
+    font: 11.5px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    overflow: auto;
+    word-break: break-all;
+    user-select: all;
+}
+
+.print-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 8px;
+}
+
+.print-actions a.btn {
+    text-decoration: none;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
 /* ==========================================================================
    Snapshots
    ========================================================================== */

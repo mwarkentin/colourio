@@ -178,6 +178,10 @@
                         <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h8"/></svg>
                         <span>Copy CSS</span>
                     </button>
+                    <button type="button" class="btn btn-print" id="printBtn" disabled>
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9V3h12v6M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="7" rx="1"/></svg>
+                        <span>Order a print</span>
+                    </button>
                 </div>
             </aside>
         </main>
@@ -196,8 +200,35 @@
             <div class="drop-overlay-inner">Drop to load image</div>
         </div>
 
+        <dialog class="print-dialog" id="printDialog" aria-labelledby="printTitle">
+            <div class="print-sheet">
+                <div class="print-head">
+                    <h2 id="printTitle">Order a print</h2>
+                    <button type="button" class="icon-btn" id="printCloseBtn" aria-label="Close">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
+                    </button>
+                </div>
+                <p class="print-intro">Pick a product. Zazzle prints and ships it; you’ll review it and check out on zazzle.com.</p>
+                <div class="print-products" id="printProducts" role="radiogroup" aria-label="Product"></div>
+                <div class="print-demo" id="printDemo" hidden>
+                    <strong>Demo mode.</strong> Zazzle and image hosting aren’t set up yet, so nothing is uploaded. You can download the print file and see the Zazzle link that would open.
+                </div>
+                <div class="print-status" id="printStatus" role="status" aria-live="polite"></div>
+                <div class="print-link" id="printLink" hidden>
+                    <span class="label">Zazzle link</span>
+                    <code id="printLinkText"></code>
+                </div>
+                <div class="print-actions">
+                    <a class="btn" id="printDownload" hidden>Download print file</a>
+                    <button type="button" class="btn btn-primary" id="printGoBtn">Create print file</button>
+                    <a class="btn btn-primary" id="printOpen" target="_blank" rel="noopener" hidden>Open on Zazzle ↗</a>
+                </div>
+            </div>
+        </dialog>
+
         <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
         <script src="app.js"></script>
+        <script src="print.js"></script>
     </body>
 </html>
