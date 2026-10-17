@@ -45,6 +45,9 @@
         toast: $('toast'),
         sourceHeading: $('sourceHeading'),
         hint: $('hint'),
+        credit: $('credit'),
+        creditText: $('creditText'),
+        creditLink: $('creditLink'),
         cropBtn: $('cropBtn'),
         cropStage: $('cropStage'),
         cropCanvas: $('cropCanvas'),
@@ -64,6 +67,7 @@
     var state = {
         img: null,          // the loaded image, kept so snapshots can restore it
         crop: null,         // {x, y, w, h} in image pixels, or null for the whole image
+        credit: null,       // catalog entry when the image is a sample, for the credit line
         pixels: null,       // ImageData of the whole source canvas
         width: 0,           // source canvas size (possibly scaled down)
         height: 0,
@@ -143,10 +147,10 @@
     // Loading images
     // ======================================================================
 
-    var loadImage = function (src, name, onDone) {
+    var loadImage = function (src, name, onDone, credit) {
         var img = new Image();
         img.onload = function () {
-            setImage(img, name);
+            setImage(img, name, null, credit);
             if (onDone) { onDone(); }
         };
         img.onerror = function () {
@@ -167,7 +171,7 @@
         });
     };
 
-    var setImage = function (img, name, crop) {
+    var setImage = function (img, name, crop, credit) {
         if (cropper) { closeCrop(); }
         crop = crop || null;
         var cropX = crop ? crop.x : 0;
@@ -196,6 +200,8 @@
 
         state.img = img;
         state.crop = crop;
+        state.credit = credit || null;
+        updateCredit();
         state.pixels = pixels;
         state.width = width;
         state.height = height;
@@ -216,6 +222,20 @@
 
         layout();
         render();
+    };
+
+    var updateCredit = function () {
+        var credit = state.credit;
+        els.credit.hidden = !credit;
+        if (!credit) { return; }
+        var byline = credit.credit + (credit.date ? ', ' + credit.date : '');
+        els.creditText.textContent = [credit.title, byline, credit.license].filter(Boolean).join(' · ') +
+            (credit.url ? ' ·' : '');
+        els.creditLink.hidden = !credit.url;
+        if (credit.url) {
+            els.creditLink.href = credit.url;
+            els.creditLink.textContent = credit.source;
+        }
     };
 
     var showEmpty = function (message) {
@@ -528,6 +548,7 @@
         var settings = {
             img: state.img,
             crop: state.crop,
+            credit: state.credit,
             name: state.name,
             x: state.x,
             y: state.y,
@@ -578,7 +599,7 @@
     // reloading its source image if another one has been opened since.
     var restoreSnapshot = function (settings) {
         if (settings.img !== state.img || !sameCrop(settings.crop, state.crop)) {
-            setImage(settings.img, settings.name, settings.crop);
+            setImage(settings.img, settings.name, settings.crop, settings.credit);
         } else if (cropper) {
             closeCrop();
         }
@@ -832,7 +853,7 @@
         var changed = !sameCrop(crop, state.crop);
         closeCrop();
         if (changed) {
-            setImage(state.img, state.name, crop);
+            setImage(state.img, state.name, crop, state.credit);
             toast(crop ? 'Cropped to ' + crop.w + ' × ' + crop.h : 'Crop removed');
         }
     };
@@ -1088,8 +1109,20 @@
             var sample = sampleLine();
             return { name: state.name, direction: state.direction, position: sample.start + 1 };
         },
-        toast: toast
+        toast: toast,
+        // Lets gallery.js load catalog images with their credit.
+        loadSample: function (sample) {
+            loadImage(sample.file, sample.id, null, sample);
+        },
+        currentSample: function () {
+            return state.credit && state.credit.id;
+        }
     };
 
-    loadImage(SAMPLE_IMAGE, 'sample');
+    var samples = window.COLOURIO_SAMPLES || [];
+    if (samples.length) {
+        window.colourio.loadSample(samples[0]);
+    } else {
+        loadImage(SAMPLE_IMAGE, 'sample');
+    }
 })();

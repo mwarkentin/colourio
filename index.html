@@ -15,6 +15,10 @@
                 colourio
             </a>
             <div class="topbar-actions">
+                <button type="button" class="btn" id="samplesBtn">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+                    <span>Samples</span>
+                </button>
                 <button type="button" class="btn" id="openBtn">
                     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4m0 0L7 9m5-5 5 5M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></svg>
                     <span>Open image</span>
@@ -98,6 +102,11 @@
                         <button type="button" class="btn btn-primary" id="cropApplyBtn">Apply</button>
                     </div>
                 </div>
+
+                <p class="credit" id="credit" hidden>
+                    <span id="creditText"></span>
+                    <a id="creditLink" target="_blank" rel="noopener"></a>
+                </p>
 
                 <p class="hint" id="hint">
                     <span class="hint-touch">Drag across the image to choose a line</span>
@@ -200,15 +209,15 @@
             <div class="drop-overlay-inner">Drop to load image</div>
         </div>
 
-        <dialog class="print-dialog" id="printDialog" aria-labelledby="printTitle">
-            <div class="print-sheet">
-                <div class="print-head">
+        <dialog class="dialog" id="printDialog" aria-labelledby="printTitle">
+            <div class="dialog-sheet">
+                <div class="dialog-head">
                     <h2 id="printTitle">Order a print</h2>
                     <button type="button" class="icon-btn" id="printCloseBtn" aria-label="Close">
                         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
                     </button>
                 </div>
-                <p class="print-intro">Pick a product. Zazzle prints and ships it; you’ll review it and check out on zazzle.com.</p>
+                <p class="dialog-intro">Pick a product. Zazzle prints and ships it; you’ll review it and check out on zazzle.com.</p>
                 <div class="print-products" id="printProducts" role="radiogroup" aria-label="Product"></div>
                 <div class="print-demo" id="printDemo" hidden>
                     <strong>Demo mode.</strong> Zazzle and image hosting aren’t set up yet, so nothing is uploaded. You can download the print file and see the Zazzle link that would open.
@@ -227,9 +236,28 @@
             </div>
         </dialog>
 
+        <dialog class="dialog samples-dialog" id="samplesDialog" aria-labelledby="samplesTitle">
+            <div class="dialog-sheet">
+                <div class="dialog-head">
+                    <h2 id="samplesTitle">Sample images</h2>
+                    <button type="button" class="icon-btn" id="samplesCloseBtn" aria-label="Close">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
+                    </button>
+                </div>
+                <p class="dialog-intro">Public-domain paintings and NASA imagery with striking palettes. Pick one to sample it.</p>
+                <div class="samples-toolbar">
+                    <div class="samples-filters" id="samplesFilters" role="group" aria-label="Filter samples"></div>
+                    <button type="button" class="btn" id="samplesRandomBtn">Surprise me</button>
+                </div>
+                <div class="samples-grid" id="samplesGrid"></div>
+            </div>
+        </dialog>
+
         <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
+        <script src="samples/catalog.js"></script>
         <script src="app.js"></script>
         <script src="print.js"></script>
+        <script src="gallery.js"></script>
     </body>
 </html>
