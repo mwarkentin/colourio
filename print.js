@@ -8,9 +8,13 @@
 
     var CONFIG = {
         zazzle: {
-            // Your Zazzle associate ID, from your Zazzle account. Referred
-            // sales through the links below are credited to it.
+            // Your Zazzle member account ID (required) and associate ID
+            // (credits referred sales); both are 18-digit numbers from your
+            // Zazzle account.
+            memberId: '',
             associateId: '',
+            // Shown against sales in your Zazzle referral history.
+            trackingCode: 'colourio',
             domain: 'zazzle.com'
         },
         cloudinary: {
@@ -20,12 +24,14 @@
             uploadPreset: ''
         },
         // Print resolution, capped so large prints stay within the canvas
-        // size limits of mobile browsers.
+        // size limits of mobile browsers. Zazzle asks for at least 100 ppi
+        // for posters and prints.
         ppi: 150,
         maxPixels: 16000000,
         // One entry per Zazzle product template. `productId` is the
-        // template's product ID and `imageParam` the URL parameter name of
-        // its image object (Zazzle's default is "image1"). Sizes in inches.
+        // template's 18-digit product ID and `imageParam` the URL parameter
+        // name of its image object (Zazzle's default is "image1"). Sizes in
+        // inches; match the template's image placeholder.
         products: [
             { id: 'poster-portrait', name: 'Poster', width: 18, height: 24, productId: '', imageParam: 'image1' },
             { id: 'poster-landscape', name: 'Poster', width: 24, height: 18, productId: '', imageParam: 'image1' },
@@ -50,14 +56,15 @@
         linkText: $('printLinkText'),
         download: $('printDownload'),
         goBtn: $('printGoBtn'),
-        open: $('printOpen')
+        open: $('printOpen'),
+        mockup: $('printMockup')
     };
 
     var selected = CONFIG.products[0];
     var fileUrl = null;
 
     var isLive = function (product) {
-        return !!(CONFIG.zazzle.associateId && CONFIG.cloudinary.cloudName &&
+        return !!(CONFIG.zazzle.memberId && CONFIG.cloudinary.cloudName &&
             CONFIG.cloudinary.uploadPreset && product.productId);
     };
 
@@ -74,19 +81,36 @@
         return bytes > 1048576 ? (bytes / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(bytes / 1024)) + ' KB';
     };
 
-    // Zazzle's Create-a-Product "linkover": opens the product page with our
-    // image dropped into the template's image object.
-    var zazzleUrl = function (product, imageUrl) {
-        var associateId = CONFIG.zazzle.associateId || 'YOUR_ASSOCIATE_ID';
-        var params = new URLSearchParams({
-            rf: associateId,
-            ax: 'Linkover',
-            pd: product.productId || 'YOUR_PRODUCT_ID',
-            fwd: 'ProductPage',
-            ed: 'true'
-        });
+    // Zazzle's Create-a-Product "linkover" (API guide v3): opens the product
+    // page with our image in the template's image object. The image code
+    // shows which design sold in your royalty history.
+    var zazzleUrl = function (product, imageUrl, imageCode) {
+        var memberId = CONFIG.zazzle.memberId || 'YOUR_MEMBER_ID';
+        var params = new URLSearchParams();
+        params.set('rf', CONFIG.zazzle.associateId || 'YOUR_ASSOCIATE_ID');
+        params.set('ax', 'Linkover');
+        params.set('pd', product.productId || 'YOUR_PRODUCT_ID');
+        params.set('ed', 'true');
+        if (CONFIG.zazzle.trackingCode) { params.set('tc', CONFIG.zazzle.trackingCode); }
+        if (imageCode) { params.set('ic', imageCode); }
+        params.set('t_' + (product.imageParam || 'image1') + '_iid', imageUrl);
+        return 'https://www.' + CONFIG.zazzle.domain + '/api/create/at-' + encodeURIComponent(memberId) + '?' + params;
+    };
+
+    // RealView: a square mockup of the product with our image on it. Note
+    // the image parameter ends in _url here, unlike the linkover's _iid.
+    var realViewUrl = function (product, imageUrl) {
+        var params = new URLSearchParams();
+        params.set('pid', product.productId);
+        params.set('max_dim', '512');
+        params.set('at', CONFIG.zazzle.memberId);
         params.set('t_' + (product.imageParam || 'image1') + '_url', imageUrl);
-        return 'https://www.' + CONFIG.zazzle.domain + '/api/create/at-' + encodeURIComponent(associateId) + '?' + params;
+        return 'https://rlv.' + CONFIG.zazzle.domain + '/svc/view?' + params;
+    };
+
+    // Image codes allow up to 100 letters, digits and underscores.
+    var imageCode = function (filename) {
+        return filename.replace(/\.[a-z]+$/i, '').replace(/[^A-Za-z0-9_]+/g, '_').slice(0, 100);
     };
 
     var upload = function (blob, filename) {
@@ -121,6 +145,8 @@
         setStatus('');
         els.demo.hidden = isLive(selected);
         els.link.hidden = true;
+        els.mockup.hidden = true;
+        els.mockup.removeAttribute('src');
         els.download.hidden = true;
         els.download.classList.remove('btn-primary');
         els.open.hidden = true;
@@ -180,14 +206,17 @@
 
         if (!isLive(product)) {
             els.download.classList.add('btn-primary');
-            els.linkText.textContent = zazzleUrl(product, 'https://res.cloudinary.com/YOUR_CLOUD/image/upload/' + filename);
+            els.linkText.textContent = zazzleUrl(product,
+                'https://res.cloudinary.com/YOUR_CLOUD/image/upload/' + filename, imageCode(filename));
             els.link.hidden = false;
             return;
         }
 
         setStatus('Uploading print file…', 'busy');
         upload(blob, filename).then(function (imageUrl) {
-            var link = zazzleUrl(product, imageUrl);
+            var link = zazzleUrl(product, imageUrl, imageCode(filename));
+            els.mockup.src = realViewUrl(product, imageUrl);
+            els.mockup.alt = 'Preview of the ' + product.name.toLowerCase() + ' on Zazzle';
             els.open.href = link;
             els.open.hidden = false;
             els.linkText.textContent = link;
@@ -241,4 +270,8 @@
     });
 
     els.dialog.addEventListener('close', resetResult);
+
+    // Only show the mockup if Zazzle could render it.
+    els.mockup.addEventListener('load', function () { els.mockup.hidden = false; });
+    els.mockup.addEventListener('error', function () { els.mockup.hidden = true; });
 })();

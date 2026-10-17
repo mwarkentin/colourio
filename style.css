@@ -998,6 +998,14 @@ input[type="range"]:focus-visible::-moz-range-thumb {
     color: var(--text);
 }
 
+.print-mockup {
+    justify-self: center;
+    width: min(256px, 100%);
+    aspect-ratio: 1;
+    border-radius: var(--radius-sm);
+    background: var(--panel-2);
+}
+
 .print-status:empty {
     display: none;
 }
