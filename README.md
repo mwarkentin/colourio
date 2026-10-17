@@ -32,5 +32,5 @@ workflow by hand from the Actions tab.
 
 - **Hover** to sample, **click** to lock / unlock (drag on touch screens)
 - **↑ ↓** (or **← →**) nudge the locked line, **Shift** for 10px steps
-- **S** saves a snapshot
+- **S** saves a snapshot; click a snapshot's label to restore its position and settings
 - **Drop** or **paste** an image anywhere to load it

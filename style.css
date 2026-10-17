@@ -718,15 +718,17 @@ input[type="range"]:focus-visible::-moz-range-thumb {
 
 .snapshot-list {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
-    gap: 14px;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 24px 20px;
     margin: 0;
     padding: 0;
     list-style: none;
 }
 
+/* minmax(0, 1fr) keeps a long label from widening the card past its column. */
 .snapshot {
     display: grid;
+    grid-template-columns: minmax(0, 1fr);
     gap: 8px;
     animation: pop-in 0.25s ease-out;
 }
@@ -758,13 +760,25 @@ input[type="range"]:focus-visible::-moz-range-thumb {
     font-size: 12px;
 }
 
-.snapshot-meta > span:first-child {
+.snapshot-restore {
     min-width: 0;
-    overflow: hidden;
+    padding: 0;
+    border: 0;
+    background: none;
     color: var(--muted);
+    font: inherit;
     font-variant-numeric: tabular-nums;
+    text-align: left;
     text-overflow: ellipsis;
     white-space: nowrap;
+    overflow: hidden;
+    cursor: pointer;
+}
+
+.snapshot-restore:hover {
+    color: var(--text);
+    text-decoration: underline;
+    text-underline-offset: 3px;
 }
 
 .snapshot-meta .icons {

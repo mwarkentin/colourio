@@ -48,6 +48,7 @@
     var lineContext = lineCanvas.getContext('2d');
 
     var state = {
+        img: null,          // the loaded image, kept so snapshots can restore it
         pixels: null,       // ImageData of the whole source canvas
         width: 0,           // source canvas size (possibly scaled down)
         height: 0,
@@ -172,6 +173,7 @@
             return;
         }
 
+        state.img = img;
         state.pixels = pixels;
         state.width = width;
         state.height = height;
@@ -496,6 +498,16 @@
     var snapshot = function () {
         if (!state.pixels) { return; }
         var noun = state.direction === 'row' ? 'Row' : 'Column';
+        var settings = {
+            img: state.img,
+            name: state.name,
+            x: state.x,
+            y: state.y,
+            direction: state.direction,
+            thickness: state.thickness,
+            blend: state.blend,
+            size: state.size
+        };
         renderFull(function (blob, filename, size, position) {
             var url = URL.createObjectURL(blob);
             var item = document.createElement('li');
@@ -503,10 +515,10 @@
             item.innerHTML =
                 '<a class="snapshot-thumb" title="Download"><img alt=""></a>' +
                 '<div class="snapshot-meta">' +
-                    '<span></span>' +
+                    '<button type="button" class="snapshot-restore"></button>' +
                     '<span class="icons">' +
                         '<a class="icon-btn" title="Download" aria-label="Download"><svg viewBox="0 0 24 24"><path d="M12 4v12m0 0-5-5m5 5 5-5M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></svg></a>' +
-                        '<button type="button" class="icon-btn" title="Remove" aria-label="Remove"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button>' +
+                        '<button type="button" class="icon-btn snapshot-remove" title="Remove" aria-label="Remove"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button>' +
                     '</span>' +
                 '</div>';
             var label = noun + ' ' + position + ' · ' + size.width + ' × ' + size.height;
@@ -516,8 +528,14 @@
             });
             item.querySelector('img').src = url;
             item.querySelector('img').alt = 'Snapshot: ' + label;
-            item.querySelector('.snapshot-meta > span').textContent = label;
-            item.querySelector('button').addEventListener('click', function () {
+            var restoreBtn = item.querySelector('.snapshot-restore');
+            restoreBtn.textContent = label;
+            restoreBtn.title = 'Restore ' + label;
+            restoreBtn.addEventListener('click', function () {
+                restoreSnapshot(settings);
+                toast('Restored ' + noun.toLowerCase() + ' ' + position);
+            });
+            item.querySelector('.snapshot-remove').addEventListener('click', function () {
                 URL.revokeObjectURL(url);
                 item.remove();
                 els.snapshots.hidden = !els.snapshotList.children.length;
@@ -526,6 +544,33 @@
             els.snapshots.hidden = false;
             toast('Snapshot saved');
         });
+    };
+
+    // Puts the picker and controls back the way they were for a snapshot,
+    // reloading its source image if another one has been opened since.
+    var restoreSnapshot = function (settings) {
+        if (settings.img !== state.img) {
+            setImage(settings.img, settings.name);
+        }
+
+        state.x = settings.x;
+        state.y = settings.y;
+        state.direction = settings.direction;
+        state.thickness = settings.thickness;
+        state.blend = settings.blend;
+        state.size = settings.size;
+        state.hover = null;
+        setLocked(true);
+
+        document.querySelector('input[name="direction"][value="' + settings.direction + '"]').checked = true;
+        document.querySelector('input[name="blend"][value="' + settings.blend + '"]').checked = true;
+        els.thickness.value = settings.thickness;
+        els.thicknessOut.textContent = settings.thickness + ' px';
+        els.size.value = settings.size;
+
+        layout();
+        render();
+        els.stage.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     };
 
     var clearSnapshots = function () {
