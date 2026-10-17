@@ -37,6 +37,10 @@
                             <span id="pixelHex">#000000</span>
                         </span>
                         <span class="readout-position" id="positionLabel">Row 1</span>
+                        <button type="button" class="chip" id="cropBtn" title="Crop the source image">
+                            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 2v14a2 2 0 0 0 2 2h14M18 22V8a2 2 0 0 0-2-2H2"/></svg>
+                            <span>Crop</span>
+                        </button>
                         <button type="button" class="chip" id="lockBtn" aria-pressed="false">
                             <svg class="icon-unlocked" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 7.5-2"/></svg>
                             <svg class="icon-locked" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>
@@ -51,6 +55,22 @@
                         <div class="sample-band" id="sampleBand" data-direction="row"></div>
                     </div>
 
+                    <div class="crop-stage" id="cropStage" tabindex="0" hidden aria-label="Crop area. Drag the box or its handles to adjust the crop; press Enter to apply or Escape to cancel.">
+                        <canvas id="cropCanvas"></canvas>
+                        <div class="crop-shade" aria-hidden="true"><div class="crop-hole" id="cropHole"></div></div>
+                        <div class="crop-box" id="cropBox">
+                            <span class="crop-grid"></span>
+                            <span class="crop-handle" data-handle="nw"></span>
+                            <span class="crop-handle" data-handle="n"></span>
+                            <span class="crop-handle" data-handle="ne"></span>
+                            <span class="crop-handle" data-handle="e"></span>
+                            <span class="crop-handle" data-handle="se"></span>
+                            <span class="crop-handle" data-handle="s"></span>
+                            <span class="crop-handle" data-handle="sw"></span>
+                            <span class="crop-handle" data-handle="w"></span>
+                        </div>
+                    </div>
+
                     <div class="empty" id="empty">
                         <div class="empty-art" aria-hidden="true">
                             <span></span><span></span><span></span><span></span><span></span>
@@ -61,7 +81,25 @@
                     </div>
                 </div>
 
-                <p class="hint">
+                <div class="crop-toolbar" id="cropToolbar" hidden>
+                    <div class="crop-ratios" role="group" aria-label="Aspect ratio">
+                        <button type="button" class="chip" data-ratio="free" aria-pressed="true">Free</button>
+                        <button type="button" class="chip" data-ratio="original" aria-pressed="false">Original</button>
+                        <button type="button" class="chip" data-ratio="1:1" aria-pressed="false">1:1</button>
+                        <button type="button" class="chip" data-ratio="4:3" aria-pressed="false">4:3</button>
+                        <button type="button" class="chip" data-ratio="3:2" aria-pressed="false">3:2</button>
+                        <button type="button" class="chip" data-ratio="16:9" aria-pressed="false">16:9</button>
+                        <button type="button" class="chip" data-ratio="9:16" aria-pressed="false">9:16</button>
+                    </div>
+                    <span class="crop-dims" id="cropDims"></span>
+                    <div class="crop-actions">
+                        <button type="button" class="btn" id="cropResetBtn">Reset</button>
+                        <button type="button" class="btn" id="cropCancelBtn">Cancel</button>
+                        <button type="button" class="btn btn-primary" id="cropApplyBtn">Apply</button>
+                    </div>
+                </div>
+
+                <p class="hint" id="hint">
                     <span class="hint-touch">Drag across the image to choose a line</span>
                     <span class="hint-pointer">
                     Hover to sample <span class="sep">·</span>

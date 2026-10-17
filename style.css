@@ -549,6 +549,160 @@ input[type="range"]:focus-visible::-moz-range-thumb {
 .sample-band[data-direction="column"].is-locked::before { top: 8px; }
 .sample-band[data-direction="column"].is-locked::after { bottom: 8px; }
 
+/* --------------------------------------------------------------------------
+   Crop
+   -------------------------------------------------------------------------- */
+
+.crop-stage {
+    position: relative;
+    line-height: 0;
+    box-shadow: var(--shadow);
+    cursor: crosshair;
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+.crop-stage:focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 3px;
+}
+
+#cropCanvas {
+    display: block;
+}
+
+/* The shade is clipped to the image; the box isn't, so its handles can
+   overhang the edges. */
+.crop-shade {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    pointer-events: none;
+}
+
+.crop-hole {
+    position: absolute;
+    box-shadow: 0 0 0 100vmax rgba(0, 0, 0, 0.58);
+}
+
+.crop-box {
+    position: absolute;
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.95), 0 0 0 2px rgba(0, 0, 0, 0.3);
+    cursor: move;
+}
+
+.crop-grid {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.15s;
+}
+
+.crop-grid::before,
+.crop-grid::after {
+    content: "";
+    position: absolute;
+    border: 0 solid rgba(255, 255, 255, 0.5);
+}
+
+.crop-grid::before {
+    top: 0;
+    bottom: 0;
+    left: 33.333%;
+    width: 33.333%;
+    border-left-width: 1px;
+    border-right-width: 1px;
+}
+
+.crop-grid::after {
+    left: 0;
+    right: 0;
+    top: 33.333%;
+    height: 33.333%;
+    border-top-width: 1px;
+    border-bottom-width: 1px;
+}
+
+.crop-stage.is-dragging .crop-grid {
+    opacity: 1;
+}
+
+.crop-handle {
+    position: absolute;
+    width: 14px;
+    height: 14px;
+    margin: -7px 0 0 -7px;
+    border-radius: 50%;
+    background: #fff;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
+}
+
+/* Bigger hit area than the visible handle */
+.crop-handle::before {
+    content: "";
+    position: absolute;
+    inset: -10px;
+}
+
+.crop-handle[data-handle="nw"] { left: 0; top: 0; cursor: nwse-resize; }
+.crop-handle[data-handle="ne"] { left: 100%; top: 0; cursor: nesw-resize; }
+.crop-handle[data-handle="se"] { left: 100%; top: 100%; cursor: nwse-resize; }
+.crop-handle[data-handle="sw"] { left: 0; top: 100%; cursor: nesw-resize; }
+
+.crop-handle[data-handle="n"],
+.crop-handle[data-handle="s"] {
+    left: 50%;
+    width: 24px;
+    height: 8px;
+    margin: -4px 0 0 -12px;
+    border-radius: 999px;
+    cursor: ns-resize;
+}
+
+.crop-handle[data-handle="n"] { top: 0; }
+.crop-handle[data-handle="s"] { top: 100%; }
+
+.crop-handle[data-handle="e"],
+.crop-handle[data-handle="w"] {
+    top: 50%;
+    width: 8px;
+    height: 24px;
+    margin: -12px 0 0 -4px;
+    border-radius: 999px;
+    cursor: ew-resize;
+}
+
+.crop-handle[data-handle="e"] { left: 100%; }
+.crop-handle[data-handle="w"] { left: 0; }
+
+.crop-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 12px;
+    margin-top: 12px;
+}
+
+.crop-ratios {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.crop-dims {
+    margin-left: auto;
+    color: var(--muted);
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+}
+
+.crop-actions {
+    display: flex;
+    gap: 8px;
+}
+
 .empty {
     display: grid;
     align-content: center;
