@@ -34,3 +34,6 @@ workflow by hand from the Actions tab.
 - **↑ ↓** (or **← →**) nudge the locked line, **Shift** for 10px steps
 - **S** saves a snapshot; click a snapshot's label to restore its position and settings
 - **Drop** or **paste** an image anywhere to load it
+- **Crop** (next to the lock) trims the source: drag the box or its handles, or drag
+  on the image to draw a new box; pick an aspect ratio; **Enter** applies, **Esc** cancels.
+  Cropping isn't destructive, so you can reopen it and widen the box again
