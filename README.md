@@ -28,6 +28,27 @@ Every push to `master` deploys the site to GitHub Pages via
 add any new site files to the "Collect site files" step. You can also run the
 workflow by hand from the Actions tab.
 
+## Samples
+
+**Samples** opens a gallery of images with striking palettes, filterable by
+Art, Space and Photo. Choosing one loads it, and a credit line under the
+source links back to where it came from. The images live in `samples/`
+(about 1600px, with thumbnails in `samples/thumbs/`), and `samples/catalog.js`
+lists each one with its title, credit, palette and source.
+
+- **Art:** public-domain paintings and prints from
+  [The Met's Open Access collection](https://www.metmuseum.org/hubs/open-access)
+  (CC0) and [Wikimedia Commons](https://commons.wikimedia.org/) (public domain).
+  Frames and paper margins are cropped off so they don't become stripes.
+- **Space:** NASA imagery. Photos taken by astronauts are public domain; the
+  Webb and JPL images are free to use with the credit shown.
+
+To add a sample, put a JPEG (about 1600px on the long side) in `samples/`, a
+thumbnail (about 480px) in `samples/thumbs/`, and an entry in
+`samples/catalog.js`. Use only images whose licence allows reuse, and fill in
+`source`, `url` and `license`. The first entry is the image that loads on
+startup.
+
 ## Prints (Zazzle)
 
 **Order a print** renders the current stripes as a print-resolution PNG for the

@@ -745,6 +745,25 @@ input[type="range"]:focus-visible::-moz-range-thumb {
     color: var(--muted);
 }
 
+.credit {
+    margin: 12px 0 0;
+    color: var(--muted);
+    font-size: 12px;
+}
+
+.credit a {
+    color: var(--text);
+    text-underline-offset: 3px;
+}
+
+.credit a::after {
+    content: " ↗";
+}
+
+.credit + .hint {
+    margin-top: 4px;
+}
+
 .hint {
     margin: 12px 0 0;
     color: var(--muted);
@@ -868,7 +887,7 @@ input[type="range"]:focus-visible::-moz-range-thumb {
    Print dialog
    ========================================================================== */
 
-.print-dialog {
+.dialog {
     width: min(560px, calc(100vw - 32px));
     max-height: calc(100vh - 32px);
     padding: 0;
@@ -880,35 +899,35 @@ input[type="range"]:focus-visible::-moz-range-thumb {
     color: var(--text);
 }
 
-.print-dialog::backdrop {
+.dialog::backdrop {
     background: rgba(10, 10, 12, 0.55);
     -webkit-backdrop-filter: blur(4px);
     backdrop-filter: blur(4px);
 }
 
-.print-dialog[open] {
+.dialog[open] {
     animation: pop-in 0.2s ease-out;
 }
 
-.print-sheet {
+.dialog-sheet {
     display: grid;
     gap: 16px;
     padding: 20px;
 }
 
-.print-head {
+.dialog-head {
     display: flex;
     align-items: center;
     justify-content: space-between;
 }
 
-.print-head h2 {
+.dialog-head h2 {
     margin: 0;
     font-size: 17px;
     font-weight: 650;
 }
 
-.print-intro {
+.dialog-intro {
     margin: -8px 0 0;
     color: var(--muted);
 }
@@ -920,7 +939,7 @@ input[type="range"]:focus-visible::-moz-range-thumb {
 }
 
 @media (max-width: 560px) {
-    .print-sheet {
+    .dialog-sheet {
         padding: 16px;
     }
 
@@ -1068,6 +1087,116 @@ input[type="range"]:focus-visible::-moz-range-thumb {
 
 @keyframes spin {
     to { transform: rotate(360deg); }
+}
+
+/* ==========================================================================
+   Samples gallery
+   ========================================================================== */
+
+.samples-dialog {
+    width: min(880px, calc(100vw - 32px));
+}
+
+.samples-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.samples-filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.samples-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 18px 14px;
+}
+
+@media (max-width: 560px) {
+    .samples-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 14px 10px;
+    }
+
+    .sample-title {
+        font-size: 13px;
+    }
+}
+
+.sample-card {
+    display: grid;
+    gap: 4px;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.sample-thumb {
+    position: relative;
+    display: block;
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+    box-shadow: inset 0 0 0 1px var(--border);
+}
+
+.sample-thumb img {
+    display: block;
+    width: 100%;
+    aspect-ratio: 4 / 3;
+    object-fit: cover;
+    transition: transform 0.25s;
+}
+
+.sample-card:hover .sample-thumb img {
+    transform: scale(1.04);
+}
+
+.sample-card[aria-current="true"] .sample-thumb {
+    box-shadow: 0 0 0 2px var(--accent);
+}
+
+.sample-card[aria-current="true"] .sample-thumb::after {
+    content: "Open";
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: var(--accent);
+    color: var(--accent-text);
+    font-size: 11px;
+    font-weight: 600;
+}
+
+.sample-palette {
+    display: flex;
+    height: 8px;
+    margin: 4px 0 2px;
+    border-radius: 999px;
+    overflow: hidden;
+}
+
+.sample-palette span {
+    flex: 1;
+}
+
+.sample-title {
+    font-weight: 600;
+    line-height: 1.3;
+}
+
+.sample-byline {
+    color: var(--muted);
+    font-size: 12px;
 }
 
 /* ==========================================================================

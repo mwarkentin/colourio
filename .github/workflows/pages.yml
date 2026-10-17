@@ -30,7 +30,8 @@ jobs:
       - name: Collect site files
         run: |
           mkdir _site
-          cp index.html app.js print.js style.css sample-image.jpeg _site/
+          cp index.html app.js print.js gallery.js style.css sample-image.jpeg _site/
+          cp -r samples _site/
 
       # Pages lets browsers cache files for 10 minutes; versioning the asset
       # URLs stops new HTML from loading a stale stylesheet or script.
