@@ -17,6 +17,13 @@
         emptyOpenBtn: $('emptyOpenBtn'),
         downloadBtn: $('downloadBtn'),
         shareBtn: $('shareBtn'),
+        shareDialog: $('shareDialog'),
+        shareCloseBtn: $('shareCloseBtn'),
+        shareLinkBtn: $('shareLinkBtn'),
+        shareLinkName: $('shareLinkName'),
+        shareLinkDesc: $('shareLinkDesc'),
+        shareFileBtn: $('shareFileBtn'),
+        shareFileName: $('shareFileName'),
         printBtn: $('printBtn'),
         snapshotBtn: $('snapshotBtn'),
         cssBtn: $('cssBtn'),
@@ -166,9 +173,13 @@
             toast('That doesn’t look like an image');
             return;
         }
-        var url = URL.createObjectURL(file);
-        loadImage(url, file.name || 'pasted-image', function () {
-            URL.revokeObjectURL(url);
+        // A colourio session file restores its settings once the image loads.
+        readSession(file).then(function (session) {
+            var url = URL.createObjectURL(file);
+            loadImage(url, file.name || 'pasted-image', function (ok) {
+                URL.revokeObjectURL(url);
+                if (ok && session) { restoreSession(session); }
+            }, session && session.credit);
         });
     };
 
@@ -1276,7 +1287,183 @@
         return true;
     };
 
-    els.shareBtn.addEventListener('click', share);
+    // ======================================================================
+    // Session files
+    // ======================================================================
+
+    // A session file is a JPEG of the current (cropped) source with the
+    // session's settings in a comment segment. Opened in colourio it restores
+    // the session; anywhere else it's an ordinary photo.
+    var SESSION_PREFIX = 'colourio-session:';
+    var SESSION_FILE_MAX = 2048;
+    var SESSION_READ_BYTES = 262144;
+    var CREDIT_FIELDS = ['title', 'credit', 'date', 'source', 'url', 'license'];
+
+    var buildSessionFile = function (callback) {
+        var scale = Math.min(1, SESSION_FILE_MAX / Math.max(state.width, state.height));
+        var canvas = document.createElement('canvas');
+        canvas.width = Math.max(1, Math.round(state.width * scale));
+        canvas.height = Math.max(1, Math.round(state.height * scale));
+        canvas.getContext('2d').drawImage(els.source, 0, 0, canvas.width, canvas.height);
+
+        var data = {
+            v: 1,
+            d: state.direction,
+            b: state.blend,
+            o: state.size,
+            t: Math.max(1, Math.round(state.thickness * scale)),
+            p: Math.round((state.direction === 'row' ? state.y : state.x) * scale),
+            m: state.naturalWidth + 'x' + state.naturalHeight
+        };
+        if (state.credit && state.credit.title) {
+            data.credit = {};
+            CREDIT_FIELDS.forEach(function (key) {
+                if (state.credit[key]) { data.credit[key] = state.credit[key]; }
+            });
+        }
+
+        canvas.toBlob(function (blob) {
+            blob.arrayBuffer().then(function (buffer) {
+                var jpeg = new Uint8Array(buffer);
+                var payload = new TextEncoder().encode(SESSION_PREFIX + JSON.stringify(data));
+                // COM segment: FF FE, then a big-endian length that counts itself.
+                var segment = new Uint8Array(4 + payload.length);
+                segment[0] = 0xFF;
+                segment[1] = 0xFE;
+                segment[2] = (payload.length + 2) >> 8;
+                segment[3] = (payload.length + 2) & 0xFF;
+                segment.set(payload, 4);
+                callback(new File([jpeg.subarray(0, 2), segment, jpeg.subarray(2)],
+                    state.name + '-colourio.jpg', { type: 'image/jpeg' }));
+            });
+        }, 'image/jpeg', 0.9);
+    };
+
+    // Finds a colourio comment among the JPEG's header segments.
+    var parseSessionComment = function (bytes) {
+        if (bytes[0] !== 0xFF || bytes[1] !== 0xD8) { return null; }
+        var i = 2;
+        while (i + 4 <= bytes.length && bytes[i] === 0xFF) {
+            var marker = bytes[i + 1];
+            if (marker === 0xDA || marker === 0xD9) { break; }
+            var length = (bytes[i + 2] << 8) | bytes[i + 3];
+            if (length < 2) { break; }
+            if (marker === 0xFE) {
+                var text = new TextDecoder().decode(bytes.subarray(i + 4, i + 2 + length));
+                if (text.indexOf(SESSION_PREFIX) === 0) {
+                    try { return JSON.parse(text.slice(SESSION_PREFIX.length)); } catch (e) { return null; }
+                }
+            }
+            i += 2 + length;
+        }
+        return null;
+    };
+
+    // Validates everything read from a file before it's used.
+    var sessionSettings = function (data) {
+        if (!data || data.v !== 1) { return null; }
+        var size = typeof data.o === 'string' ? data.o : '';
+        var credit = null;
+        if (data.credit && typeof data.credit === 'object') {
+            credit = { id: null };
+            CREDIT_FIELDS.forEach(function (key) {
+                credit[key] = typeof data.credit[key] === 'string' ? data.credit[key].slice(0, 200) : '';
+            });
+            if (!/^https:\/\//.test(credit.url)) { credit.url = ''; }
+            if (!credit.title) { credit = null; }
+        }
+        return {
+            direction: data.d === 'column' ? 'column' : 'row',
+            blend: data.b === 'crisp' ? 'crisp' : 'smooth',
+            size: Array.prototype.some.call(els.size.options, function (o) { return o.value === size; }) ? size : 'match',
+            thickness: clamp(parseInt(data.t, 10) || 1, 1, +els.thickness.max),
+            position: Number.isInteger(data.p) ? data.p : null,
+            match: parseDims(data.m),
+            credit: credit
+        };
+    };
+
+    var readSession = function (file) {
+        if (file.type !== 'image/jpeg' || !file.arrayBuffer) { return Promise.resolve(null); }
+        return file.slice(0, SESSION_READ_BYTES).arrayBuffer().then(function (buffer) {
+            return sessionSettings(parseSessionComment(new Uint8Array(buffer)));
+        }).catch(function () { return null; });
+    };
+
+    var restoreSession = function (settings) {
+        // Keep "Match source image" at the original size, not the file's.
+        var match = settings.match;
+        if (match && Math.abs(match.width / match.height - state.width / state.height) < 0.01) {
+            state.naturalWidth = match.width;
+            state.naturalHeight = match.height;
+        }
+        if (settings.position !== null) {
+            if (settings.direction === 'row') {
+                state.y = clamp(settings.position, 0, state.height - 1);
+            } else {
+                state.x = clamp(settings.position, 0, state.width - 1);
+            }
+        }
+        applySettings(settings);
+        toast('Session restored');
+    };
+
+    // ======================================================================
+    // Share dialog
+    // ======================================================================
+
+    var pendingFile = null;
+    var canShareFiles = !!(navigator.canShare && window.File &&
+        navigator.canShare({ files: [new File([''], 'test.jpg', { type: 'image/jpeg' })] }));
+    var canShareLinks = !!navigator.share && window.matchMedia('(pointer: coarse)').matches;
+
+    var openShareDialog = function () {
+        if (!state.pixels) { return; }
+        var stripesOnly = !(state.credit && state.credit.id && findSample(state.credit.id));
+        els.shareLinkName.textContent = canShareLinks ? 'Share link' : 'Copy link';
+        els.shareLinkDesc.textContent = stripesOnly
+            ? 'Shares the stripes and palette. Your photo stays on your device.'
+            : 'Reopens this exact session.';
+        els.shareFileName.textContent = canShareFiles ? 'Share photo with session' : 'Download session file';
+        els.shareFileBtn.disabled = true;
+        pendingFile = null;
+        // Build the file now: Safari only opens the share sheet straight
+        // from a tap, so it has to be ready when the button is pressed.
+        buildSessionFile(function (file) {
+            pendingFile = file;
+            els.shareFileBtn.disabled = false;
+        });
+        els.shareDialog.showModal();
+    };
+
+    var shareSessionFile = function () {
+        var file = pendingFile;
+        if (!file) { return; }
+        els.shareDialog.close();
+        if (canShareFiles) {
+            navigator.share({
+                files: [file],
+                title: 'colourio session',
+                text: 'Open this image in colourio to pick up where I left off: ' + location.href.split('#')[0]
+            }).catch(function () {});
+            return;
+        }
+        var url = URL.createObjectURL(file);
+        downloadUrl(url, file.name);
+        setTimeout(function () { URL.revokeObjectURL(url); }, 10000);
+        toast('Session file downloaded · open it in colourio to pick up where you left off');
+    };
+
+    els.shareBtn.addEventListener('click', openShareDialog);
+    els.shareLinkBtn.addEventListener('click', function () {
+        els.shareDialog.close();
+        share();
+    });
+    els.shareFileBtn.addEventListener('click', shareSessionFile);
+    els.shareCloseBtn.addEventListener('click', function () { els.shareDialog.close(); });
+    els.shareDialog.addEventListener('click', function (e) {
+        if (e.target === els.shareDialog) { els.shareDialog.close(); }
+    });
     window.addEventListener('hashchange', function () { openShare(location.hash); });
 
     // Lets print.js render the current stripes at print sizes.
