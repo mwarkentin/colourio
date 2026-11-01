@@ -8,13 +8,18 @@
 
     var CONFIG = {
         zazzle: {
-            // Your Zazzle member account ID (required) and associate ID
-            // (credits referred sales); both are 18-digit numbers from your
-            // Zazzle account.
+            // Your Zazzle member account ID (required), an 18-digit number.
             memberId: '',
-            associateId: '',
-            // Shown against sales in your Zazzle referral history.
-            trackingCode: 'colourio',
+            // Leave blank. Zazzle counts any link carrying your Ambassador ID
+            // (rf=) as a Cross-Promotion Link, which earns only 15% on wall
+            // art; links to your own Create-a-Product pages without it can
+            // earn the Self-Promotion rate (40%). Sent as rf= only if set.
+            ambassadorId: '',
+            // Off by default: tracking codes feed your referral history, so
+            // tc= may also mark links as cross-promotion. Set one (e.g.
+            // 'colourio') only once Zazzle confirms it keeps the
+            // Self-Promotion rate.
+            trackingCode: '',
             domain: 'zazzle.com'
         },
         cloudinary: {
@@ -87,7 +92,7 @@
     var zazzleUrl = function (product, imageUrl, imageCode) {
         var memberId = CONFIG.zazzle.memberId || 'YOUR_MEMBER_ID';
         var params = new URLSearchParams();
-        params.set('rf', CONFIG.zazzle.associateId || 'YOUR_ASSOCIATE_ID');
+        if (CONFIG.zazzle.ambassadorId) { params.set('rf', CONFIG.zazzle.ambassadorId); }
         params.set('ax', 'Linkover');
         params.set('pd', product.productId || 'YOUR_PRODUCT_ID');
         params.set('ed', 'true');
