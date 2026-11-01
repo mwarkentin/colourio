@@ -60,8 +60,8 @@ is also readable outside colourio, for example with
 
 ## Telemetry
 
-`telemetry.js` sends errors, performance traces and session replays to Sentry,
-like the games site. It does nothing until `SENTRY_DSN` is set, and only runs
+`telemetry.js` sends errors, performance traces, session replays, logs and
+metrics to Sentry, like the games site. It does nothing until `SENTRY_DSN` is set, and only runs
 on `mwarkentin.github.io/colourio`, so local previews send nothing. It loads
 Sentry's SDK from `browser.sentry-cdn.com`, pinned to a version with an
 integrity hash, and the deploy workflow stamps each release with its commit.
@@ -72,6 +72,32 @@ blocked and canvas recording isn't loaded, leaving grey boxes in their place.
 File names are masked (elements with `sentry-mask`, and `download`
 attributes), inputs are masked by default, and no user details or IP addresses
 are sent. Keep new photo or file-name UI covered by those rules.
+
+App code reports through `window.colourioTelemetry` (`count`, `distribution`,
+`info`, `warn`, `error` and `timer`), which exists even when Sentry doesn't load,
+so it's safe to call anywhere. What it records:
+
+- **Print funnel:** dialog opened, print file created or failed, uploaded or
+  failed, and Zazzle opened, by product, plus print file size and how long
+  rendering and uploading take. Upload and print-file failures are sent as
+  errors.
+- **Images:** where each image came from (`default`, `gallery`, `surprise`,
+  `file_picker`, `drop`, `paste`, `share_link`), its size in megapixels, and
+  how long loading takes.
+- **Features:** samples chosen, settings changed, crops, snapshots, palette and
+  CSS copies, PNG downloads by size, and shares by method (link copied or
+  through the share sheet, session file shared or downloaded).
+- **Warnings** (Sentry logs): images that fail to load or aren't images,
+  invalid share links, unrecognised session files, clipboard failures and share
+  sheet failures. Cancelling the share sheet is counted, not logged.
+- **Capabilities:** once per page load, whether the browser can share files
+  and links.
+
+Log and metric attributes may only be numbers, booleans or short identifiers
+from a fixed set, such as `source: "upload"` or `size: "1920x1080"`. Anything
+else, such as a file name or URL, is dropped before sending, and a
+`beforeSendLog`/`beforeSendMetric` hook does the same as a backstop. Pointer
+moves, individual renders and slider steps aren't recorded.
 
 It reports to the `colourio` project in Sentry. To point it elsewhere, or turn
 it off, change or empty `SENTRY_DSN`. The DSN is safe to publish.

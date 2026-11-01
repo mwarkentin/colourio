@@ -1,5 +1,6 @@
-// Error reporting, performance and session replays through Sentry, loaded at
-// the top of <head> so it catches errors from the rest of the page.
+// Error reporting, performance, session replays, logs and metrics through
+// Sentry, loaded at the top of <head> so it catches errors from the rest of
+// the page.
 //
 // People load their own photos, so replays never record them: canvases and
 // images are blocked (and canvas recording isn't loaded), leaving grey boxes
@@ -7,17 +8,99 @@
 // names can be personal, so anything marked .sentry-mask is masked, as are
 // download attributes. Inputs are masked by Sentry's defaults, and no user
 // details or IP addresses are sent.
+//
+// The app reports through window.colourioTelemetry (below), which exists even
+// when Sentry doesn't load, so app code can call it anywhere. Log and metric
+// attributes may only be numbers, booleans or short strings from a fixed set
+// (such as source: "upload"): never file names, URLs, colours or other text.
 (() => {
   // The colourio project's DSN. While it's empty, nothing loads and nothing is sent.
   const SENTRY_DSN = 'https://b98b8520a5afbc19effd9745fd58ea81@o1142222.ingest.us.sentry.io/4512357893865472';
   const SDK = {
-    src: 'https://browser.sentry-cdn.com/11.10.0/bundle.tracing.replay.min.js',
-    integrity: 'sha384-lQjzZ9F8GMovuCkjuP9IfDB/640c2hJYHmoc7LXfsG/Lhp9d05tRhrS4sfkOw/Hz',
+    src: 'https://browser.sentry-cdn.com/11.10.0/bundle.tracing.replay.logs.metrics.min.js',
+    integrity: 'sha384-B+WMd8/+CmQVo0y6MSf00jCF4kTC2TdqWOmzZO+mIC42N/Eo0/3fopMkrDr+bDqp',
   };
 
   // Only the live site reports; local previews and tests send nothing.
   const live = location.hostname === 'mwarkentin.github.io' && location.pathname.startsWith('/colourio');
-  if (!SENTRY_DSN || !live) return;
+  const enabled = Boolean(SENTRY_DSN) && live;
+
+  // Attribute values must look like identifiers ("upload", "1920x1080",
+  // "16:9", "NotAllowedError"); anything else is dropped, so a file name or a
+  // URL can't slip through by mistake.
+  const SAFE_VALUE = /^[A-Za-z0-9_.:+-]{1,40}$/;
+  const clean = (attributes) => {
+    const out = {};
+    Object.keys(attributes || {}).forEach((key) => {
+      const value = attributes[key];
+      if (typeof value === 'number' && isFinite(value)) out[key] = value;
+      else if (typeof value === 'boolean') out[key] = value;
+      else if (typeof value === 'string' && SAFE_VALUE.test(value)) out[key] = value;
+    });
+    return out;
+  };
+  // A backstop for attributes that reach Sentry by any other route; the
+  // SDK's own sentry.* attributes are kept.
+  const scrubAttributes = (item) => {
+    if (item && item.attributes) {
+      const own = {};
+      const internal = {};
+      Object.keys(item.attributes).forEach((key) => {
+        (key.startsWith('sentry.') ? internal : own)[key] = item.attributes[key];
+      });
+      item.attributes = { ...clean(own), ...internal };
+    }
+    return item;
+  };
+
+  // Calls made before the SDK has loaded wait here, then run in order. If it
+  // never loads (an ad blocker, say), they're dropped.
+  let ready = false;
+  let failed = false;
+  const pending = [];
+  const run = (fn) => {
+    if (!enabled || failed) return;
+    if (ready) fn();
+    else if (pending.length < 200) pending.push(fn);
+  };
+
+  window.colourioTelemetry = {
+    // A metric counter, e.g. count('print.uploaded', { product: 'canvas' }).
+    count(name, attributes) {
+      run(() => Sentry.metrics.count(name, 1, { attributes: clean(attributes) }));
+    },
+    // A metric distribution, e.g. distribution('print.file_bytes', 2e5, 'byte').
+    distribution(name, value, unit, attributes) {
+      if (typeof value !== 'number' || !isFinite(value)) return;
+      run(() => Sentry.metrics.distribution(name, value, { unit, attributes: clean(attributes) }));
+    },
+    // A log line. Messages are fixed strings; details go in attributes.
+    info(message, attributes) {
+      run(() => Sentry.logger.info(message, clean(attributes)));
+    },
+    warn(message, attributes) {
+      run(() => Sentry.logger.warn(message, clean(attributes)));
+    },
+    // A handled failure worth fixing, sent as an error with its attributes as tags.
+    error(error, attributes) {
+      run(() => Sentry.captureException(error, { tags: clean(attributes) }));
+    },
+    // Times a step that may finish in a callback: const t = timer('print.render');
+    // ...; t.end({ product }). The span is created when it ends, with the
+    // recorded start time, so it works before the SDK has loaded too.
+    timer(name, attributes) {
+      const startTime = Date.now() / 1000;
+      return {
+        end(extra) {
+          const endTime = Date.now() / 1000;
+          const all = clean({ ...attributes, ...extra });
+          run(() => Sentry.startInactiveSpan({ name, op: name, startTime, attributes: all }).end(endTime));
+        },
+      };
+    },
+  };
+
+  if (!enabled) return;
 
   // The deploy workflow stamps the commit on this script's data-release.
   const release = document.currentScript?.dataset.release || undefined;
@@ -54,8 +137,16 @@
       replaysSessionSampleRate: 0.1,
       replaysOnErrorSampleRate: 1,
       dataCollection: { userInfo: false },
+      beforeSendLog: scrubAttributes,
+      beforeSendMetric: scrubAttributes,
     });
     early.forEach((error) => Sentry.captureException(error, { mechanism: { handled: false } }));
+    ready = true;
+    pending.splice(0).forEach((fn) => fn());
+  };
+  script.onerror = () => {
+    failed = true;
+    pending.length = 0;
   };
   document.head.append(script);
 })();

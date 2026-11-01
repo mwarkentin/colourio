@@ -21,9 +21,13 @@
     var filter = 'All';
     var cards = [];
 
-    var choose = function (sample) {
+    var T = window.colourio.telemetry;
+
+    // `how` is card or surprise; sample ids are catalog names, safe to report.
+    var choose = function (sample, how) {
         els.dialog.close();
-        window.colourio.loadSample(sample);
+        T.count('sample.chosen', { sample: sample.id, group: sample.group, how: how });
+        window.colourio.loadSample(sample, how === 'surprise' ? 'surprise' : 'gallery');
     };
 
     var buildCard = function (sample) {
@@ -58,7 +62,7 @@
         byline.textContent = [sample.credit, sample.date].filter(Boolean).join(' · ');
 
         card.append(thumb, palette, title, byline);
-        card.addEventListener('click', function () { choose(sample); });
+        card.addEventListener('click', function () { choose(sample, 'card'); });
         return card;
     };
 
@@ -100,6 +104,7 @@
         }
         update();
         els.dialog.showModal();
+        T.count('samples.opened');
     });
 
     // A random sample from the current filter, never the one already open.
@@ -108,7 +113,7 @@
         var pool = samples.filter(function (sample) {
             return (filter === 'All' || sample.group === filter) && sample.id !== current;
         });
-        if (pool.length) { choose(pool[Math.floor(Math.random() * pool.length)]); }
+        if (pool.length) { choose(pool[Math.floor(Math.random() * pool.length)], 'surprise'); }
     });
 
     els.closeBtn.addEventListener('click', function () { els.dialog.close(); });
