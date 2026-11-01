@@ -73,8 +73,8 @@ File names are masked (elements with `sentry-mask`, and `download`
 attributes), inputs are masked by default, and no user details or IP addresses
 are sent. Keep new photo or file-name UI covered by those rules.
 
-To turn it on, create a Browser JavaScript project called `colourio` in Sentry
-and paste its DSN into `SENTRY_DSN`. The DSN is safe to publish.
+It reports to the `colourio` project in Sentry. To point it elsewhere, or turn
+it off, change or empty `SENTRY_DSN`. The DSN is safe to publish.
 
 ## Samples
 

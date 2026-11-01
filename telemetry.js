@@ -9,7 +9,7 @@
 // details or IP addresses are sent.
 (() => {
   // The colourio project's DSN. While it's empty, nothing loads and nothing is sent.
-  const SENTRY_DSN = '';
+  const SENTRY_DSN = 'https://b98b8520a5afbc19effd9745fd58ea81@o1142222.ingest.us.sentry.io/4512357893865472';
   const SDK = {
     src: 'https://browser.sentry-cdn.com/11.10.0/bundle.tracing.replay.min.js',
     integrity: 'sha384-lQjzZ9F8GMovuCkjuP9IfDB/640c2hJYHmoc7LXfsG/Lhp9d05tRhrS4sfkOw/Hz',
