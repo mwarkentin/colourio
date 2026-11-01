@@ -80,6 +80,13 @@
     };
 
     var sourceContext = els.source.getContext('2d', { willReadFrequently: true });
+    // Reports to Sentry through telemetry.js; does nothing if that didn't load.
+    var NO_TELEMETRY = {
+        count: function () {}, distribution: function () {}, info: function () {},
+        warn: function () {}, error: function () {}, timer: function () { return { end: function () {} }; }
+    };
+    var T = window.colourioTelemetry || NO_TELEMETRY;
+
     var lineCanvas = document.createElement('canvas');
     var lineContext = lineCanvas.getContext('2d');
 
@@ -167,22 +174,35 @@
     // Loading images
     // ======================================================================
 
-    var loadImage = function (src, name, onDone, credit) {
+    // `source` says where the image came from (default, gallery, file_picker,
+    // drop, paste or share_link), for telemetry.
+    var loadImage = function (src, name, onDone, credit, source) {
         var img = new Image();
+        var timer = T.timer('image.load', { source: source });
         img.onload = function () {
             setImage(img, name, null, credit);
-            if (onDone) { onDone(!!state.pixels); }
+            var ok = !!state.pixels && state.img === img;
+            timer.end({ ok: ok });
+            if (ok) {
+                T.count('image.loaded', { source: source, sample: !!(credit && credit.id) });
+                T.distribution('image.megapixels', img.naturalWidth * img.naturalHeight / 1e6, undefined, { source: source });
+            }
+            if (onDone) { onDone(ok); }
         };
         img.onerror = function () {
             toast("Couldn't read that image");
+            timer.end({ ok: false });
+            T.warn('Image failed to load', { source: source });
             if (onDone) { onDone(false); }
         };
         img.src = src;
     };
 
-    var loadFile = function (file) {
+    var loadFile = function (file, source) {
         if (!file || !/^image\//.test(file.type)) {
             toast('That doesn’t look like an image');
+            // A MIME type like text/plain is reported as text_plain.
+            T.warn('Not an image', { source: source, type: file ? (file.type || 'unknown').replace('/', '_') : 'none' });
             return;
         }
         // A colourio session file restores its settings once the image loads.
@@ -192,9 +212,11 @@
                 URL.revokeObjectURL(url);
                 if (ok && session && session.settings) { restoreSession(session.settings); }
                 if (ok && session) {
+                    T.count('session_file.opened', { source: source, valid: !!session.settings });
+                    if (!session.settings) { T.warn('Session file not recognised', { source: source }); }
                     setSessionOrigin({ name: file.name || 'session file', raw: session.raw, width: state.width, height: state.height });
                 }
-            }, session && session.settings && session.settings.credit);
+            }, session && session.settings && session.settings.credit, source);
         });
     };
 
@@ -221,6 +243,7 @@
             pixels = sourceContext.getImageData(0, 0, width, height);
         } catch (e) {
             // Browsers block reading pixels from images loaded over file://.
+            T.warn('Image pixels unreadable');
             showEmpty('or paste one from your clipboard. (The bundled sample needs the page to be served over http.)');
             return;
         }
@@ -490,7 +513,13 @@
             swatch.className = 'swatch';
             swatch.addEventListener('click', function () {
                 var hex = this.dataset.hex;
-                copyText(hex).then(function () { toast('Copied ' + hex); }, function () { toast(hex); });
+                copyText(hex).then(function () {
+                    toast('Copied ' + hex);
+                    T.count('palette.copied');
+                }, function () {
+                    toast(hex);
+                    T.warn('Clipboard copy failed', { what: 'palette' });
+                });
             });
             els.palette.appendChild(swatch);
             swatches.push(swatch);
@@ -563,7 +592,10 @@
 
     var download = function () {
         if (!state.pixels) { return; }
+        var timer = T.timer('download.render', { size: state.size });
         renderFull(function (blob, filename) {
+            timer.end();
+            T.count('download.png', { size: state.size, direction: state.direction, blend: state.blend });
             var url = URL.createObjectURL(blob);
             downloadUrl(url, filename);
             setTimeout(function () { URL.revokeObjectURL(url); }, 10000);
@@ -611,6 +643,7 @@
             restoreBtn.addEventListener('click', function () {
                 restoreSnapshot(settings);
                 toast('Restored ' + noun.toLowerCase() + ' ' + position);
+                T.count('snapshot.restored');
             });
             item.querySelector('.snapshot-remove').addEventListener('click', function () {
                 URL.revokeObjectURL(url);
@@ -620,6 +653,7 @@
             els.snapshotList.prepend(item);
             els.snapshots.hidden = false;
             toast('Snapshot saved');
+            T.count('snapshot.saved');
         });
     };
 
@@ -776,6 +810,7 @@
             state.direction = input.value;
             state.hover = null;
             scheduleRender();
+            T.count('setting.changed', { setting: 'direction', value: input.value });
         });
     });
 
@@ -783,6 +818,7 @@
         input.addEventListener('change', function () {
             state.blend = input.value;
             scheduleRender();
+            T.count('setting.changed', { setting: 'blend', value: input.value });
         });
     });
 
@@ -792,16 +828,22 @@
         scheduleRender();
     });
 
+    // Counted once the slider is released, not on every step.
+    els.thickness.addEventListener('change', function () {
+        T.count('setting.changed', { setting: 'thickness' });
+    });
+
     els.size.addEventListener('change', function () {
         state.size = els.size.value;
         layout();
         scheduleRender();
+        T.count('setting.changed', { setting: 'size', value: state.size });
     });
 
     els.openBtn.addEventListener('click', function () { els.fileInput.click(); });
     els.emptyOpenBtn.addEventListener('click', function () { els.fileInput.click(); });
     els.fileInput.addEventListener('change', function () {
-        loadFile(els.fileInput.files[0]);
+        loadFile(els.fileInput.files[0], 'file_picker');
         els.fileInput.value = '';
     });
 
@@ -812,7 +854,13 @@
     els.cssBtn.addEventListener('click', function () {
         if (!state.sample) { return; }
         var css = 'background: ' + gradientCss(state.sample, GRADIENT_STOPS, state.direction === 'row' ? 90 : 180) + ';';
-        copyText(css).then(function () { toast('CSS gradient copied'); }, function () { toast("Couldn't copy to clipboard"); });
+        copyText(css).then(function () {
+            toast('CSS gradient copied');
+            T.count('css.copied');
+        }, function () {
+            toast("Couldn't copy to clipboard");
+            T.warn('Clipboard copy failed', { what: 'css' });
+        });
     });
 
     // ======================================================================
@@ -884,8 +932,10 @@
         if (crop.x === 0 && crop.y === 0 && crop.w === width && crop.h === height) { crop = null; }
 
         var changed = !sameCrop(crop, state.crop);
+        var ratioButton = els.cropToolbar.querySelector('[data-ratio][aria-pressed="true"]');
         closeCrop();
         if (changed) {
+            T.count(crop ? 'crop.applied' : 'crop.removed', { ratio: ratioButton ? ratioButton.dataset.ratio : 'free' });
             setImage(state.img, state.name, crop, state.credit);
             toast(crop ? 'Cropped to ' + crop.w + ' × ' + crop.h : 'Crop removed');
         }
@@ -1105,7 +1155,7 @@
         e.preventDefault();
         dragDepth = 0;
         document.body.classList.remove('is-dragging');
-        loadFile(e.dataTransfer.files[0]);
+        loadFile(e.dataTransfer.files[0], 'drop');
     });
 
     window.addEventListener('paste', function (e) {
@@ -1113,7 +1163,7 @@
         for (var i = 0; i < items.length; i++) {
             if (items[i].kind === 'file' && /^image\//.test(items[i].type)) {
                 e.preventDefault();
-                loadFile(items[i].getAsFile());
+                loadFile(items[i].getAsFile(), 'paste');
                 return;
             }
         }
@@ -1197,16 +1247,32 @@
         if (!state.pixels) { return; }
         var url = shareUrl();
         var stripesOnly = url.indexOf('&l=') !== -1;
+        var type = stripesOnly ? 'stripes' : 'sample';
         if (navigator.share && window.matchMedia('(pointer: coarse)').matches) {
             if (stripesOnly) { toast('The link shares the stripes, not your image'); }
-            navigator.share({ title: 'colourio', url: url }).catch(function () {});
+            navigator.share({ title: 'colourio', url: url }).then(function () {
+                T.count('share.link', { method: 'sheet', type: type });
+            }, function (error) {
+                shareFailed(error, 'link');
+            });
             return;
         }
         copyText(url).then(function () {
             toast(stripesOnly ? 'Link copied · it shares the stripes, not your image' : 'Link copied');
+            T.count('share.link', { method: 'copy', type: type });
         }, function () {
             toast('Couldn’t copy the link');
+            T.warn('Clipboard copy failed', { what: 'share_link' });
         });
+    };
+
+    // Cancelling the share sheet rejects with AbortError; anything else is a failure.
+    var shareFailed = function (error, what) {
+        if (error && error.name === 'AbortError') {
+            T.count('share.cancelled', { what: what });
+        } else {
+            T.warn('Share sheet failed', { what: what, error: error && error.name || 'unknown' });
+        }
     };
 
     var parseDims = function (text) {
@@ -1262,8 +1328,10 @@
             var sample = findSample(params.get('s'));
             if (!sample) {
                 toast('That sample isn’t available any more');
+                T.warn('Share link invalid', { reason: 'unknown_sample' });
                 return false;
             }
+            T.count('share_link.opened', { type: 'sample' });
             var crop = (params.get('c') || '').split('_').map(Number);
             var position = parseInt(params.get('p'), 10);
             loadImage(sample.file, sample.id, function (ok) {
@@ -1282,7 +1350,7 @@
                     }
                 }
                 applySettings(settings);
-            }, sample);
+            }, sample, 'share_link');
             return true;
         }
 
@@ -1290,15 +1358,17 @@
         try { bytes = fromBase64Url(params.get('l')); } catch (e) { /* invalid link */ }
         if (!bytes || bytes.length < 3 || bytes.length % 3) {
             toast('That link couldn’t be opened');
+            T.warn('Share link invalid', { reason: 'bad_data' });
             return false;
         }
+        T.count('share_link.opened', { type: 'stripes' });
         var dims = parseDims(params.get('m')) || { width: 1600, height: 1000 };
         settings.thickness = 1;
         stripesImageUrl(bytes, settings.direction, dims, function (url) {
             loadImage(url, 'shared-stripes', function (ok) {
                 URL.revokeObjectURL(url);
                 if (ok) { applySettings(settings); }
-            }, SHARED_CREDIT);
+            }, SHARED_CREDIT, 'share_link');
         });
         return true;
     };
@@ -1447,9 +1517,13 @@
         els.shareFileBtn.disabled = true;
         els.shareDetailsBtn.disabled = true;
         pendingFile = null;
+        T.count('share.dialog_opened', { type: stripesOnly ? 'stripes' : 'sample' });
+        var timer = T.timer('session_file.build');
         // Build the file now: Safari only opens the share sheet straight
         // from a tap, so it has to be ready when the button is pressed.
         buildSessionFile(function (file, details) {
+            timer.end();
+            T.distribution('session_file.bytes', file.size, 'byte');
             pendingFile = file;
             pendingDetails = details;
             els.shareFileBtn.disabled = false;
@@ -1467,11 +1541,16 @@
                 files: [file],
                 title: 'colourio session',
                 text: 'Open this image in colourio to pick up where I left off: ' + location.href.split('#')[0]
-            }).catch(function () {});
+            }).then(function () {
+                T.count('share.session_file', { method: 'sheet' });
+            }, function (error) {
+                shareFailed(error, 'session_file');
+            });
             return;
         }
         var url = URL.createObjectURL(file);
         downloadUrl(url, file.name);
+        T.count('share.session_file', { method: 'download' });
         setTimeout(function () { URL.revokeObjectURL(url); }, 10000);
         toast('Session file downloaded · open it in colourio to pick up where you left off');
     };
@@ -1580,21 +1659,25 @@
             return { name: state.name, direction: state.direction, position: sample.start + 1 };
         },
         toast: toast,
+        telemetry: T,
         // Lets gallery.js load catalog images with their credit.
-        loadSample: function (sample) {
-            loadImage(sample.file, sample.id, null, sample);
+        loadSample: function (sample, source) {
+            loadImage(sample.file, sample.id, null, sample, source || 'gallery');
         },
         currentSample: function () {
             return state.credit && state.credit.id;
         }
     };
 
+    // Once per page load: how many visitors can use the share sheet.
+    T.count('app.loaded', { share_files: canShareFiles, share_links: canShareLinks });
+
     var samples = window.COLOURIO_SAMPLES || [];
     if (openShare(location.hash)) {
         // The share link loads its own image.
     } else if (samples.length) {
-        window.colourio.loadSample(samples[0]);
+        window.colourio.loadSample(samples[0], 'default');
     } else {
-        loadImage(SAMPLE_IMAGE, 'sample');
+        loadImage(SAMPLE_IMAGE, 'sample', null, null, 'default');
     }
 })();

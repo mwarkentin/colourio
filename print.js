@@ -66,6 +66,7 @@
     };
 
     var selected = CONFIG.products[0];
+    var T = window.colourio.telemetry;
     var fileUrl = null;
 
     var isLive = function (product) {
@@ -126,7 +127,9 @@
         return fetch(url, { method: 'POST', body: form }).then(function (res) {
             return res.json().catch(function () { return {}; }).then(function (body) {
                 if (!res.ok || !body.secure_url) {
-                    throw new Error((body.error && body.error.message) || 'HTTP ' + res.status);
+                    var error = new Error((body.error && body.error.message) || 'HTTP ' + res.status);
+                    error.status = res.status;
+                    throw error;
                 }
                 return body.secure_url;
             });
@@ -218,7 +221,10 @@
         }
 
         setStatus('Uploading print file…', 'busy');
+        var timer = T.timer('print.upload', { product: product.id });
         upload(blob, filename).then(function (imageUrl) {
+            timer.end({ ok: true });
+            T.count('print.uploaded', { product: product.id });
             var link = zazzleUrl(product, imageUrl, imageCode(filename));
             els.mockup.src = realViewUrl(product, imageUrl);
             els.mockup.alt = 'Preview of the ' + product.name.toLowerCase() + ' on Zazzle';
@@ -228,6 +234,10 @@
             els.link.hidden = false;
             setStatus('Ready. Zazzle will show your stripes on the ' + product.name.toLowerCase() + '.', 'done');
         }, function (error) {
+            timer.end({ ok: false });
+            // Cloudinary's message isn't forwarded; the status says enough.
+            T.error(new Error('Print file upload failed'), { product: product.id, status: error.status || 'network' });
+            T.count('print.upload_failed', { product: product.id });
             setStatus('Upload failed (' + error.message + '). You can still download the print file.', 'error');
             els.download.classList.add('btn-primary');
         });
@@ -239,16 +249,25 @@
         els.goBtn.disabled = true;
         setStatus('Rendering ' + size.width + ' × ' + size.height + ' px print file…', 'busy');
 
+        var mode = isLive(product) ? 'live' : 'demo';
+        var timer = T.timer('print.render', { product: product.id });
+
         // Give the status a frame to paint before the (blocking) render.
         requestAnimationFrame(function () {
             setTimeout(function () {
                 var canvas = window.colourio.render(size.width, size.height);
                 canvas.toBlob(function (blob) {
+                    timer.end({ ok: !!blob });
                     if (!blob) {
+                        // Usually a canvas too large for the device's memory.
+                        T.error(new Error('Print file could not be created'), { product: product.id, width: size.width, height: size.height });
+                        T.count('print.file_failed', { product: product.id });
                         setStatus('Couldn’t create the print file. Try a smaller product.', 'error');
                         els.goBtn.disabled = false;
                         return;
                     }
+                    T.count('print.file_created', { product: product.id, mode: mode });
+                    T.distribution('print.file_bytes', blob.size, 'byte', { product: product.id });
                     var info = window.colourio.describe();
                     var filename = [info.name, info.direction, info.position, product.id].join('-') + '.png';
                     setStatus('Print file ready · ' + size.width + ' × ' + size.height + ' px (' + size.ppi +
@@ -264,6 +283,14 @@
         buildProducts();
         resetResult();
         els.dialog.showModal();
+        T.count('print.dialog_opened', { mode: CONFIG.products.some(isLive) ? 'live' : 'demo' });
+    });
+
+    els.open.addEventListener('click', function () {
+        T.count('print.zazzle_opened', { product: selected.id });
+    });
+    els.download.addEventListener('click', function () {
+        T.count('print.file_downloaded', { product: selected.id, mode: isLive(selected) ? 'live' : 'demo' });
     });
 
     els.goBtn.addEventListener('click', createPrintFile);
@@ -278,5 +305,8 @@
 
     // Only show the mockup if Zazzle could render it.
     els.mockup.addEventListener('load', function () { els.mockup.hidden = false; });
-    els.mockup.addEventListener('error', function () { els.mockup.hidden = true; });
+    els.mockup.addEventListener('error', function () {
+        els.mockup.hidden = true;
+        if (els.mockup.getAttribute('src')) { T.warn('Print mockup failed', { product: selected.id }); }
+    });
 })();
