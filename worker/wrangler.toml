@@ -1,0 +1,30 @@
+# Cloudflare Worker that stores colourio's print files in R2 so Zazzle can
+# fetch them. See README.md for setup.
+name = "colourio-prints"
+main = "src/index.js"
+compatibility_date = "2026-10-01"
+
+# Workers Logs keeps the Worker's console output and uncaught exceptions for
+# a few days. Invocation logs stay off: they would record every request's
+# headers, client IP included.
+[observability]
+enabled = true
+
+[observability.logs]
+invocation_logs = false
+
+[vars]
+# Pages allowed to upload. The localhost entries are for testing colourio
+# against `wrangler dev`.
+ALLOWED_ORIGINS = "https://mwarkentin.github.io,http://localhost:8000,http://127.0.0.1:8000"
+
+[[r2_buckets]]
+binding = "PRINTS"
+bucket_name = "colourio-prints"
+
+# Uploads per IP address per minute, counted at each Cloudflare location.
+# The namespace_id is any number unique to this account's rate limiters.
+[[ratelimits]]
+name = "UPLOADS"
+namespace_id = "2701"
+simple = { limit = 10, period = 60 }

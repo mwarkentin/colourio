@@ -28,6 +28,9 @@ Every push to `master` deploys the site to GitHub Pages via
 add any new site files to the "Collect site files" step. You can also run the
 workflow by hand from the Actions tab.
 
+The print upload Worker in `worker/` deploys separately, through
+`.github/workflows/worker.yml`; see [worker/README.md](worker/README.md).
+
 ## Sharing
 
 **Share** offers two ways to pass a session on. Neither uploads anything.
@@ -79,7 +82,8 @@ so it's safe to call anywhere. What it records:
 
 - **Print funnel:** dialog opened, print file created or failed, uploaded or
   failed, and Zazzle opened, by product, plus print file size and how long
-  rendering and uploading take. Upload and print-file failures are sent as
+  rendering and uploading take. Uploads are also tagged with `upload_host`
+  (`worker` or `cloudinary`). Upload and print-file failures are sent as
   errors.
 - **Images:** where each image came from (`default`, `gallery`, `surprise`,
   `file_picker`, `drop`, `paste`, `share_link`), its size in megapixels, and
@@ -126,10 +130,10 @@ startup.
 ## Prints (Zazzle)
 
 **Order a print** renders the current stripes as a print-resolution PNG for the
-chosen product, uploads it to Cloudinary, and opens Zazzle's product page with
-the image on it. Zazzle handles checkout, printing and shipping, and referred
-sales earn through your Zazzle Ambassador account. The dialog tells buyers that
-colourio earns a commission on orders.
+chosen product, uploads it so Zazzle can fetch it, and opens Zazzle's product
+page with the image on it. Zazzle handles checkout, printing and shipping, and
+referred sales earn through your Zazzle Ambassador account. The dialog tells
+buyers that colourio earns a commission on orders.
 
 Out of the box it runs in **demo mode**: nothing is uploaded, and the dialog
 shows the print file and the Zazzle link it would open. To go live, follow
@@ -143,9 +147,10 @@ Zazzle's [Create-a-Product API guide](https://www.zazzle.com/api) and fill in
    Put your member account ID in `zazzle.memberId` (an 18-digit number).
 2. **Keep links self-promotional:** leave `zazzle.ambassadorId` and
    `zazzle.trackingCode` blank. See [Commission](#commission) below.
-3. **Declare the image domain:** add `res.cloudinary.com` on the
-   [domains page](https://www.zazzle.com/my/associate/domains). Zazzle refuses
-   images from undeclared domains.
+3. **Declare the image domain** of your upload host (step 5) on the
+   [domains page](https://www.zazzle.com/my/ambassador/domains): the Worker's
+   domain, such as `colourio-prints.<your-subdomain>.workers.dev`, or
+   `res.cloudinary.com`. Zazzle refuses images from undeclared domains.
 4. **Store and templates:** [create a store](https://www.zazzle.com/my/store/create),
    then for each product make a design with an image placeholder the same shape
    as the product. Turn on **Make this a template object**, note its **URL
@@ -154,11 +159,17 @@ Zazzle's [Create-a-Product API guide](https://www.zazzle.com/api) and fill in
    Yes. Copy the 18-digit number at the end of the product's URL into
    `productId`. Templates can't be edited once posted, so test one before making
    the rest.
-5. **Image hosting:** Zazzle fetches the image from a public URL. Create a
-   Cloudinary account, add an **unsigned** upload preset (Settings → Upload),
-   and set `cloudinary.cloudName` and `cloudinary.uploadPreset`. Anyone who
-   reads the page source can use an unsigned preset, so restrict it to PNGs, a
-   size limit and a folder.
+5. **Image hosting:** Zazzle fetches the image from a public URL, so
+   colourio uploads it first. Set `hosting.provider` to the host you use:
+   - `'worker'`: colourio's own Cloudflare Worker, which keeps files in R2.
+     It checks every upload, limits uploads per visitor and deletes files
+     after a year. Follow [worker/README.md](worker/README.md) to deploy it,
+     then set `hosting.worker.url`.
+   - `'cloudinary'`: create a Cloudinary account, add an **unsigned** upload
+     preset (Settings → Upload), and set `hosting.cloudinary.cloudName` and
+     `hosting.cloudinary.uploadPreset`. Anyone who reads the page source can
+     use an unsigned preset, so restrict it to PNGs, a size limit and a
+     folder.
 6. **Test:** generate a link and compare it with Zazzle's
    [link builder](https://www.zazzle.com/my/associate/create) (Create a
    Template Link).
