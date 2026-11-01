@@ -30,7 +30,7 @@ jobs:
       - name: Collect site files
         run: |
           mkdir _site
-          cp index.html app.js print.js gallery.js style.css sample-image.jpeg _site/
+          cp index.html telemetry.js app.js print.js gallery.js style.css sample-image.jpeg _site/
           cp -r samples _site/
 
       # Pages lets browsers cache files for 10 minutes; versioning the asset
@@ -39,6 +39,12 @@ jobs:
         run: |
           sed -i -E "s/(href=\"[^\"]+\.css|src=\"[^\"]+\.js)\"/\1?v=${GITHUB_SHA::8}\"/g" _site/index.html
           grep -E "\.(css|js)\?v=" _site/index.html
+
+      # Tells Sentry which commit each error or replay came from.
+      - name: Stamp release for telemetry
+        run: |
+          sed -i -E "s/<script src=\"telemetry\.js/<script data-release=\"${GITHUB_SHA}\" src=\"telemetry.js/" _site/index.html
+          grep -E "data-release=\"[0-9a-f]{40}\" src=\"telemetry\.js" _site/index.html
 
       - uses: actions/upload-pages-artifact@v3
         with:

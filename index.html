@@ -2,6 +2,7 @@
 <html lang="en">
     <head>
         <meta charset="utf-8">
+        <script src="telemetry.js"></script>
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <title>Colourio</title>
         <meta name="description" content="Turn a single line of pixels from any image into a colour-stripe wallpaper.">
@@ -113,7 +114,7 @@
                         <a id="creditLink" target="_blank" rel="noopener"></a>
                     </p>
                     <p class="session-origin" id="sessionOrigin" hidden>
-                        Restored from <span id="sessionOriginName"></span> ·
+                        Restored from <span class="sentry-mask" id="sessionOriginName"></span> ·
                         <button type="button" class="link-btn" id="sessionDetailsBtn">View saved data</button>
                     </p>
 
@@ -237,7 +238,7 @@
                 <div class="print-status" id="printStatus" role="status" aria-live="polite"></div>
                 <div class="print-link" id="printLink" hidden>
                     <span class="label">Zazzle link</span>
-                    <code id="printLinkText"></code>
+                    <code class="sentry-mask" id="printLinkText"></code>
                 </div>
                 <div class="print-actions">
                     <a class="btn" id="printDownload" hidden>Download print file</a>
@@ -305,7 +306,7 @@
                         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
                     </button>
                 </div>
-                <p class="dialog-intro" id="detailsIntro"></p>
+                <p class="dialog-intro sentry-mask" id="detailsIntro"></p>
                 <dl class="details-list" id="detailsList"></dl>
                 <p class="details-note">Nothing else is stored: no camera data, location or device information.</p>
                 <details class="details-raw" id="detailsRawWrap">
