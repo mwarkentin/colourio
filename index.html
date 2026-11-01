@@ -107,21 +107,27 @@
                     </div>
                 </div>
 
-                <p class="credit" id="credit" hidden>
-                    <span id="creditText"></span>
-                    <a id="creditLink" target="_blank" rel="noopener"></a>
-                </p>
+                <div class="source-meta">
+                    <p class="credit" id="credit" hidden>
+                        <span id="creditText"></span>
+                        <a id="creditLink" target="_blank" rel="noopener"></a>
+                    </p>
+                    <p class="session-origin" id="sessionOrigin" hidden>
+                        Restored from <span id="sessionOriginName"></span> ·
+                        <button type="button" class="link-btn" id="sessionDetailsBtn">View saved data</button>
+                    </p>
 
-                <p class="hint" id="hint">
-                    <span class="hint-touch">Drag across the image to choose a line</span>
-                    <span class="hint-pointer">
-                    Hover to sample <span class="sep">·</span>
-                    Click to lock <span class="sep">·</span>
-                    <kbd>↑</kbd><kbd>↓</kbd> nudge (<kbd>Shift</kbd> for 10px) <span class="sep">·</span>
-                    <kbd>S</kbd> saves a snapshot <span class="sep">·</span>
-                    Drop or paste to load an image
-                    </span>
-                </p>
+                    <p class="hint" id="hint">
+                        <span class="hint-touch">Drag across the image to choose a line</span>
+                        <span class="hint-pointer">
+                        Hover to sample <span class="sep">·</span>
+                        Click to lock <span class="sep">·</span>
+                        <kbd>↑</kbd><kbd>↓</kbd> nudge (<kbd>Shift</kbd> for 10px) <span class="sep">·</span>
+                        <kbd>S</kbd> saves a snapshot <span class="sep">·</span>
+                        Drop or paste to load an image
+                        </span>
+                    </p>
+                </div>
             </section>
 
             <aside class="panel output-panel" aria-labelledby="outputHeading">
@@ -285,7 +291,27 @@
                         </span>
                     </button>
                 </div>
+                <button type="button" class="link-btn share-details" id="shareDetailsBtn" disabled>What’s saved in the file?</button>
                 <p class="share-note">Some chat apps recompress photos and drop the saved settings. The photo still opens; send it as a file, or by AirDrop or email, to keep the session.</p>
+            </div>
+        </dialog>
+
+        <dialog class="dialog details-dialog" id="detailsDialog" aria-labelledby="detailsTitle">
+            <div class="dialog-sheet">
+                <div class="dialog-head">
+                    <h2 id="detailsTitle">Session details</h2>
+                    <button type="button" class="icon-btn" id="detailsCloseBtn" aria-label="Close">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
+                    </button>
+                </div>
+                <p class="dialog-intro" id="detailsIntro"></p>
+                <dl class="details-list" id="detailsList"></dl>
+                <p class="details-note">Nothing else is stored: no camera data, location or device information.</p>
+                <details class="details-raw" id="detailsRawWrap">
+                    <summary>Raw data</summary>
+                    <pre id="detailsRaw"></pre>
+                    <button type="button" class="btn" id="detailsCopyBtn">Copy</button>
+                </details>
             </div>
         </dialog>
 
