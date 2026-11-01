@@ -52,6 +52,12 @@ session, and anywhere else it's an ordinary photo. Re-encoding drops the
 original photo's metadata, such as GPS location. Chat apps that recompress
 photos may strip the settings; the photo still opens.
 
+To see what a session file holds, use **What's saved in the file?** in the
+Share dialog before sending, or **View saved data** under the image after
+opening one. Both show the settings in plain language plus the raw data, which
+is also readable outside colourio, for example with
+`identify -format "%c" file.jpg` (ImageMagick) or `exiftool -Comment file.jpg`.
+
 ## Samples
 
 **Samples** opens a gallery of images with striking palettes, filterable by

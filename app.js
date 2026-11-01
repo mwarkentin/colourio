@@ -24,6 +24,17 @@
         shareLinkDesc: $('shareLinkDesc'),
         shareFileBtn: $('shareFileBtn'),
         shareFileName: $('shareFileName'),
+        shareDetailsBtn: $('shareDetailsBtn'),
+        sessionOrigin: $('sessionOrigin'),
+        sessionOriginName: $('sessionOriginName'),
+        sessionDetailsBtn: $('sessionDetailsBtn'),
+        detailsDialog: $('detailsDialog'),
+        detailsCloseBtn: $('detailsCloseBtn'),
+        detailsIntro: $('detailsIntro'),
+        detailsList: $('detailsList'),
+        detailsRawWrap: $('detailsRawWrap'),
+        detailsRaw: $('detailsRaw'),
+        detailsCopyBtn: $('detailsCopyBtn'),
         printBtn: $('printBtn'),
         snapshotBtn: $('snapshotBtn'),
         cssBtn: $('cssBtn'),
@@ -76,6 +87,7 @@
         img: null,          // the loaded image, kept so snapshots can restore it
         crop: null,         // {x, y, w, h} in image pixels, or null for the whole image
         credit: null,       // catalog entry when the image is a sample, for the credit line
+        sessionFile: null,  // {name, raw, width, height} when the image came from a session file
         pixels: null,       // ImageData of the whole source canvas
         width: 0,           // source canvas size (possibly scaled down)
         height: 0,
@@ -178,8 +190,11 @@
             var url = URL.createObjectURL(file);
             loadImage(url, file.name || 'pasted-image', function (ok) {
                 URL.revokeObjectURL(url);
-                if (ok && session) { restoreSession(session); }
-            }, session && session.credit);
+                if (ok && session && session.settings) { restoreSession(session.settings); }
+                if (ok && session) {
+                    setSessionOrigin({ name: file.name || 'session file', raw: session.raw, width: state.width, height: state.height });
+                }
+            }, session && session.settings && session.settings.credit);
         });
     };
 
@@ -210,6 +225,7 @@
             return;
         }
 
+        if (img !== state.img) { setSessionOrigin(null); }
         state.img = img;
         state.crop = crop;
         state.credit = credit || null;
@@ -1334,7 +1350,8 @@
                 segment[3] = (payload.length + 2) & 0xFF;
                 segment.set(payload, 4);
                 callback(new File([jpeg.subarray(0, 2), segment, jpeg.subarray(2)],
-                    state.name + '-colourio.jpg', { type: 'image/jpeg' }));
+                    state.name + '-colourio.jpg', { type: 'image/jpeg' }),
+                    { raw: data, width: canvas.width, height: canvas.height });
             });
         }, 'image/jpeg', 0.9);
     };
@@ -1386,7 +1403,8 @@
     var readSession = function (file) {
         if (file.type !== 'image/jpeg' || !file.arrayBuffer) { return Promise.resolve(null); }
         return file.slice(0, SESSION_READ_BYTES).arrayBuffer().then(function (buffer) {
-            return sessionSettings(parseSessionComment(new Uint8Array(buffer)));
+            var raw = parseSessionComment(new Uint8Array(buffer));
+            return raw ? { raw: raw, settings: sessionSettings(raw) } : null;
         }).catch(function () { return null; });
     };
 
@@ -1413,6 +1431,7 @@
     // ======================================================================
 
     var pendingFile = null;
+    var pendingDetails = null;
     var canShareFiles = !!(navigator.canShare && window.File &&
         navigator.canShare({ files: [new File([''], 'test.jpg', { type: 'image/jpeg' })] }));
     var canShareLinks = !!navigator.share && window.matchMedia('(pointer: coarse)').matches;
@@ -1426,12 +1445,15 @@
             : 'Reopens this exact session.';
         els.shareFileName.textContent = canShareFiles ? 'Share photo with session' : 'Download session file';
         els.shareFileBtn.disabled = true;
+        els.shareDetailsBtn.disabled = true;
         pendingFile = null;
         // Build the file now: Safari only opens the share sheet straight
         // from a tap, so it has to be ready when the button is pressed.
-        buildSessionFile(function (file) {
+        buildSessionFile(function (file, details) {
             pendingFile = file;
+            pendingDetails = details;
             els.shareFileBtn.disabled = false;
+            els.shareDetailsBtn.disabled = false;
         });
         els.shareDialog.showModal();
     };
@@ -1453,6 +1475,88 @@
         setTimeout(function () { URL.revokeObjectURL(url); }, 10000);
         toast('Session file downloaded · open it in colourio to pick up where you left off');
     };
+
+    // ======================================================================
+    // Session details
+    // ======================================================================
+
+    var setSessionOrigin = function (info) {
+        state.sessionFile = info;
+        els.sessionOrigin.hidden = !info;
+        if (info) { els.sessionOriginName.textContent = info.name; }
+    };
+
+    // Plain-language rows built from the same validated values colourio
+    // applies; each row is [label, text, optional https link].
+    var sessionRows = function (raw, dims) {
+        var settings = sessionSettings(raw);
+        if (!settings) { return [['Format', 'Not a session format this version of colourio understands']]; }
+        var isRow = settings.direction === 'row';
+        var noun = isRow ? 'Row' : 'Column';
+        var axis = isRow ? dims.height : dims.width;
+        // Same rule as restoreSession: the original size only counts if it
+        // has the image's shape.
+        var original = settings.match;
+        var match = original && Math.abs(original.width / original.height - dims.width / dims.height) < 0.01
+            ? original.width + ' × ' + original.height : null;
+        var option = Array.prototype.filter.call(els.size.options, function (o) { return o.value === settings.size; })[0];
+        var rows = [
+            ['Sample', isRow ? 'A row of pixels' : 'A column of pixels'],
+            ['Line position', settings.position === null ? 'Centre'
+                : noun + ' ' + (clamp(settings.position, 0, axis - 1) + 1) + ' of ' + axis],
+            ['Thickness', settings.thickness + ' px'],
+            ['Blend', settings.blend === 'crisp' ? 'Crisp' : 'Smooth'],
+            ['Output size', option.text + (settings.size === 'match' && match ? ' (' + match + ')' : '')],
+            ['Image in the file', dims.width + ' × ' + dims.height]
+        ];
+        if (match && (original.width !== dims.width || original.height !== dims.height)) {
+            rows.push(['Original image', match]);
+        }
+        if (settings.credit) {
+            var credit = settings.credit;
+            var byline = credit.credit + (credit.date ? ', ' + credit.date : '');
+            rows.push(['Credit', [credit.title, byline, credit.source, credit.license].filter(Boolean).join(' · '), credit.url]);
+        }
+        return rows;
+    };
+
+    var showSessionDetails = function (info, intro) {
+        if (!info) { return; }
+        els.detailsIntro.textContent = intro;
+        els.detailsList.innerHTML = '';
+        sessionRows(info.raw, info).forEach(function (row) {
+            var term = document.createElement('dt');
+            term.textContent = row[0];
+            var value = document.createElement('dd');
+            value.textContent = row[1];
+            if (row[2]) {
+                var link = document.createElement('a');
+                link.href = row[2];
+                link.target = '_blank';
+                link.rel = 'noopener';
+                link.textContent = 'Source';
+                value.append(' ', link);
+            }
+            els.detailsList.append(term, value);
+        });
+        els.detailsRaw.textContent = JSON.stringify(info.raw, null, 2);
+        els.detailsRawWrap.open = false;
+        els.detailsDialog.showModal();
+    };
+
+    els.shareDetailsBtn.addEventListener('click', function () {
+        showSessionDetails(pendingDetails, 'What the file you share will contain.');
+    });
+    els.sessionDetailsBtn.addEventListener('click', function () {
+        showSessionDetails(state.sessionFile, 'Read from ' + state.sessionFile.name + '.');
+    });
+    els.detailsCopyBtn.addEventListener('click', function () {
+        copyText(els.detailsRaw.textContent).then(function () { toast('Session data copied'); }, function () { toast('Couldn’t copy'); });
+    });
+    els.detailsCloseBtn.addEventListener('click', function () { els.detailsDialog.close(); });
+    els.detailsDialog.addEventListener('click', function (e) {
+        if (e.target === els.detailsDialog) { els.detailsDialog.close(); }
+    });
 
     els.shareBtn.addEventListener('click', openShareDialog);
     els.shareLinkBtn.addEventListener('click', function () {
