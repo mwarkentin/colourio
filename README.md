@@ -58,6 +58,24 @@ opening one. Both show the settings in plain language plus the raw data, which
 is also readable outside colourio, for example with
 `identify -format "%c" file.jpg` (ImageMagick) or `exiftool -Comment file.jpg`.
 
+## Telemetry
+
+`telemetry.js` sends errors, performance traces and session replays to Sentry,
+like the games site. It does nothing until `SENTRY_DSN` is set, and only runs
+on `mwarkentin.github.io/colourio`, so local previews send nothing. It loads
+Sentry's SDK from `browser.sentry-cdn.com`, pinned to a version with an
+integrity hash, and the deploy workflow stamps each release with its commit.
+
+Replays cover 10% of sessions and every session with an error. People load
+their own photos, so replays never record them: canvases and images are
+blocked and canvas recording isn't loaded, leaving grey boxes in their place.
+File names are masked (elements with `sentry-mask`, and `download`
+attributes), inputs are masked by default, and no user details or IP addresses
+are sent. Keep new photo or file-name UI covered by those rules.
+
+To turn it on, create a Browser JavaScript project called `colourio` in Sentry
+and paste its DSN into `SENTRY_DSN`. The DSN is safe to publish.
+
 ## Samples
 
 **Samples** opens a gallery of images with striking palettes, filterable by
