@@ -10,15 +10,16 @@
         zazzle: {
             // Your Zazzle member account ID (required), an 18-digit number.
             memberId: '',
-            // Your Ambassador ID, sent as rf= to mark links as referrals.
-            // Optional: under the Ambassador Program Agreement, links with
-            // rf= count as Cross-Promotion Links (15% on wall art), while
-            // links to your own Create-a-Product pages without it may count
-            // as Self-Promotion Links (40%). Confirm with Zazzle which
-            // applies, and leave this blank if rf= should be left out.
+            // Leave blank. Zazzle counts any link carrying your Ambassador ID
+            // (rf=) as a Cross-Promotion Link, which earns only 15% on wall
+            // art; links to your own Create-a-Product pages without it can
+            // earn the Self-Promotion rate (40%). Sent as rf= only if set.
             ambassadorId: '',
-            // Shown against sales in your Zazzle referral history.
-            trackingCode: 'colourio',
+            // Off by default: tracking codes feed your referral history, so
+            // tc= may also mark links as cross-promotion. Set one (e.g.
+            // 'colourio') only once Zazzle confirms it keeps the
+            // Self-Promotion rate.
+            trackingCode: '',
             domain: 'zazzle.com'
         },
         cloudinary: {

@@ -97,8 +97,8 @@ Zazzle's [Create-a-Product API guide](https://www.zazzle.com/api) and fill in
    (formerly the Associates Program) and
    [accept the API terms](https://www.zazzle.com/my/associate/create_a_product_api_signup).
    Put your member account ID in `zazzle.memberId` (an 18-digit number).
-2. **Ask Zazzle which commission applies:** see [Commission](#commission)
-   below, then set or leave out `zazzle.ambassadorId`.
+2. **Keep links self-promotional:** leave `zazzle.ambassadorId` and
+   `zazzle.trackingCode` blank. See [Commission](#commission) below.
 3. **Declare the image domain:** add `res.cloudinary.com` on the
    [domains page](https://www.zazzle.com/my/associate/domains). Zazzle refuses
    images from undeclared domains.
@@ -120,8 +120,8 @@ Zazzle's [Create-a-Product API guide](https://www.zazzle.com/api) and fill in
    Template Link).
 
 The link follows the guide's 1-to-1 template format:
-`https://www.zazzle.com/api/create/at-{memberId}?rf={ambassadorId}&ax=Linkover&pd={productId}&ed=true&tc=colourio&ic={image code}&t_image1_iid={encoded image URL}`,
-with `rf` left out when `ambassadorId` is blank. Once live, the dialog also
+`https://www.zazzle.com/api/create/at-{memberId}?ax=Linkover&pd={productId}&ed=true&ic={image code}&t_image1_iid={encoded image URL}`.
+`rf` and `tc` are added only if `ambassadorId` or `trackingCode` is set. Once live, the dialog also
 shows Zazzle's RealView mockup of the product. Products without a `productId`
 stay in demo mode, so you can go live one product at a time.
 
@@ -130,12 +130,15 @@ stay in demo mode, so you can go live one product at a time.
 Under Zazzle's
 [Ambassador Program Agreement](https://www.zazzle.com/terms/ambassadors_agreement)
 (effective April 2025), the link type sets the rate. For Wall Art & Décor,
-**Self-Promotion Links** to your own products, which may include
-Create-a-Product API pages, earn 40% of net sales (royalty plus commission) but
-must not carry referral parameters such as `rf=`. **Cross-Promotion Links**
-carrying your Ambassador ID earn 15%. API links always carry parameters (the
-product and image), so ask Zazzle Developer Support (api.help@zazzle.com) which
-rate a linkover to your own template earns, and whether to drop `rf`. See the
+**Self-Promotion Links** to your own products, including Create-a-Product API
+pages, earn 40% of net sales (royalty plus commission) but must not carry
+referral parameters. Zazzle states that any link carrying your Ambassador ID
+(`?rf=…`) counts as a **Cross-Promotion Link** and earns only 15%, so colourio
+leaves `rf` out by default. It also leaves out the tracking code (`tc`), which
+feeds your referral history and might be treated the same way, and keeps the
+image code (`ic`), which feeds your royalty history. Worth confirming with
+Zazzle Developer Support (api.help@zazzle.com) that a linkover without `rf` or
+`tc` earns the Self-Promotion rate, and whether `tc` is safe to add back. See the
 [commission table](https://www.zazzle.com/hc/article/ambassador_referral_commissions_creator_royalties-30810357489175)
 for current rates.
 
