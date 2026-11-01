@@ -28,6 +28,18 @@ Every push to `master` deploys the site to GitHub Pages via
 add any new site files to the "Collect site files" step. You can also run the
 workflow by hand from the Actions tab.
 
+## Sharing
+
+**Share** copies a link that reopens the session (on phones it opens the share
+sheet). Everything lives in the link's `#fragment`, so nothing is uploaded:
+
+- **Samples** are shared by id along with the crop, line position, thickness,
+  direction, blend and output size, so the link reopens the whole session
+  exactly.
+- **Your own images** can't fit in a link, so it carries the sampled line
+  instead (up to 1024 colours, about 4 KB) plus the output size. The recipient
+  gets the same stripes, palette and download, but not your photo.
+
 ## Samples
 
 **Samples** opens a gallery of images with striking palettes, filterable by
@@ -98,6 +110,7 @@ product at a time.
 - **↑ ↓** (or **← →**) nudge the locked line, **Shift** for 10px steps
 - **S** saves a snapshot; click a snapshot's label to restore its position and settings
 - **Drop** or **paste** an image anywhere to load it
+- **Share** copies a link to the current session
 - **Crop** (next to the lock) trims the source: drag the box or its handles, or drag
   on the image to draw a new box; pick an aspect ratio; **Enter** applies, **Esc** cancels.
   Cropping isn't destructive, so you can reopen it and widen the box again

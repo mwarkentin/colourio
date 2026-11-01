@@ -16,6 +16,7 @@
         openBtn: $('openBtn'),
         emptyOpenBtn: $('emptyOpenBtn'),
         downloadBtn: $('downloadBtn'),
+        shareBtn: $('shareBtn'),
         printBtn: $('printBtn'),
         snapshotBtn: $('snapshotBtn'),
         cssBtn: $('cssBtn'),
@@ -151,11 +152,11 @@
         var img = new Image();
         img.onload = function () {
             setImage(img, name, null, credit);
-            if (onDone) { onDone(); }
+            if (onDone) { onDone(!!state.pixels); }
         };
         img.onerror = function () {
             toast("Couldn't read that image");
-            if (onDone) { onDone(); }
+            if (onDone) { onDone(false); }
         };
         img.src = src;
     };
@@ -218,7 +219,7 @@
         els.readout.hidden = false;
         els.preview.hidden = false;
         els.previewPlaceholder.hidden = true;
-        [els.downloadBtn, els.snapshotBtn, els.cssBtn, els.printBtn].forEach(function (btn) { btn.disabled = false; });
+        [els.downloadBtn, els.shareBtn, els.snapshotBtn, els.cssBtn, els.printBtn].forEach(function (btn) { btn.disabled = false; });
 
         layout();
         render();
@@ -606,6 +607,12 @@
 
         state.x = settings.x;
         state.y = settings.y;
+        applySettings(settings);
+        els.stage.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    };
+
+    // Sets the sampling controls and locks the line where it is.
+    var applySettings = function (settings) {
         state.direction = settings.direction;
         state.thickness = settings.thickness;
         state.blend = settings.blend;
@@ -621,7 +628,6 @@
 
         layout();
         render();
-        els.stage.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     };
 
     var clearSnapshots = function () {
@@ -1100,6 +1106,179 @@
     }).observe(els.stage);
     window.addEventListener('resize', layout);
 
+    // ======================================================================
+    // Share links
+    // ======================================================================
+
+    // A link records the session in its #fragment. Samples are shared by
+    // id, crop and position, so the link reopens the whole session. Other
+    // images can't travel in a link, so their sampled line is encoded
+    // instead and the recipient gets the same stripes, just not the photo.
+    var SHARE_VERSION = '1';
+    var SHARE_LINE_MAX = 1024;
+    var SHARED_STRIPES_MAX = 6000;
+    var SHARED_CREDIT = { id: null, title: 'Shared stripes', credit: 'the original image isn’t included in the link' };
+
+    var toBase64Url = function (bytes) {
+        var text = '';
+        for (var i = 0; i < bytes.length; i++) { text += String.fromCharCode(bytes[i]); }
+        return btoa(text).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    };
+
+    var fromBase64Url = function (text) {
+        var raw = atob(text.replace(/-/g, '+').replace(/_/g, '/'));
+        var bytes = new Uint8Array(raw.length);
+        for (var i = 0; i < raw.length; i++) { bytes[i] = raw.charCodeAt(i); }
+        return bytes;
+    };
+
+    var findSample = function (id) {
+        return (window.COLOURIO_SAMPLES || []).filter(function (sample) { return sample.id === id; })[0];
+    };
+
+    var shareUrl = function () {
+        var params = new URLSearchParams();
+        var sample = sampleLine();
+        params.set('v', SHARE_VERSION);
+        params.set('d', state.direction);
+        params.set('b', state.blend);
+        params.set('o', state.size);
+
+        if (state.credit && state.credit.id && findSample(state.credit.id)) {
+            params.set('s', state.credit.id);
+            params.set('p', state.direction === 'row' ? state.y : state.x);
+            params.set('t', state.thickness);
+            if (state.crop) {
+                params.set('c', [state.crop.x, state.crop.y, state.crop.w, state.crop.h].join('_'));
+            }
+        } else {
+            var count = Math.min(sample.length, SHARE_LINE_MAX);
+            var colours = resample(sample.line, sample.length, count, false);
+            var bytes = new Uint8Array(count * 3);
+            for (var i = 0; i < count; i++) {
+                bytes[i * 3] = colours[i * 4];
+                bytes[i * 3 + 1] = colours[i * 4 + 1];
+                bytes[i * 3 + 2] = colours[i * 4 + 2];
+            }
+            params.set('l', toBase64Url(bytes));
+            params.set('m', state.naturalWidth + 'x' + state.naturalHeight);
+        }
+        return location.href.split('#')[0] + '#' + params;
+    };
+
+    var share = function () {
+        if (!state.pixels) { return; }
+        var url = shareUrl();
+        var stripesOnly = url.indexOf('&l=') !== -1;
+        if (navigator.share && window.matchMedia('(pointer: coarse)').matches) {
+            if (stripesOnly) { toast('The link shares the stripes, not your image'); }
+            navigator.share({ title: 'colourio', url: url }).catch(function () {});
+            return;
+        }
+        copyText(url).then(function () {
+            toast(stripesOnly ? 'Link copied · it shares the stripes, not your image' : 'Link copied');
+        }, function () {
+            toast('Couldn’t copy the link');
+        });
+    };
+
+    var parseDims = function (text) {
+        var match = /^(\d{1,5})x(\d{1,5})$/.exec(text || '');
+        return match && +match[1] > 0 && +match[2] > 0 ? { width: +match[1], height: +match[2] } : null;
+    };
+
+    // Builds an image whose every row (or column) is the shared line, so the
+    // rest of the app treats it like any other source.
+    var stripesImageUrl = function (bytes, direction, dims, callback) {
+        var count = bytes.length / 3;
+        var line = new Uint8ClampedArray(count * 4);
+        for (var i = 0; i < count; i++) {
+            line[i * 4] = bytes[i * 3];
+            line[i * 4 + 1] = bytes[i * 3 + 1];
+            line[i * 4 + 2] = bytes[i * 3 + 2];
+            line[i * 4 + 3] = 255;
+        }
+        var scale = Math.min(1, SHARED_STRIPES_MAX / Math.max(dims.width, dims.height));
+        var width = Math.max(1, Math.round(dims.width * scale));
+        var height = Math.max(1, Math.round(dims.height * scale));
+        var isRow = direction === 'row';
+        var length = isRow ? width : height;
+        var pixels = resample(line, count, length, false);
+
+        lineCanvas.width = isRow ? length : 1;
+        lineCanvas.height = isRow ? 1 : length;
+        lineContext.putImageData(new ImageData(pixels, lineCanvas.width, lineCanvas.height), 0, 0);
+        var canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        var context = canvas.getContext('2d');
+        context.imageSmoothingEnabled = false;
+        context.drawImage(lineCanvas, 0, 0, width, height);
+        canvas.toBlob(function (blob) { callback(URL.createObjectURL(blob)); }, 'image/png');
+    };
+
+    // Opens the session described by a share link's fragment. Returns false
+    // if the fragment isn't a share link, so startup can load the default.
+    var openShare = function (hash) {
+        var params = new URLSearchParams((hash || '').replace(/^#/, ''));
+        if (!params.has('s') && !params.has('l')) { return false; }
+
+        var size = params.get('o');
+        var settings = {
+            direction: params.get('d') === 'column' ? 'column' : 'row',
+            blend: params.get('b') === 'crisp' ? 'crisp' : 'smooth',
+            size: Array.prototype.some.call(els.size.options, function (o) { return o.value === size; }) ? size : 'match',
+            thickness: clamp(parseInt(params.get('t'), 10) || 1, 1, +els.thickness.max)
+        };
+
+        if (params.has('s')) {
+            var sample = findSample(params.get('s'));
+            if (!sample) {
+                toast('That sample isn’t available any more');
+                return false;
+            }
+            var crop = (params.get('c') || '').split('_').map(Number);
+            var position = parseInt(params.get('p'), 10);
+            loadImage(sample.file, sample.id, function (ok) {
+                if (!ok) { return; }
+                var img = state.img;
+                if (crop.length === 4 && crop.every(function (n) { return n >= 0 && Math.floor(n) === n; }) &&
+                        crop[2] > 0 && crop[3] > 0 &&
+                        crop[0] + crop[2] <= img.naturalWidth && crop[1] + crop[3] <= img.naturalHeight) {
+                    setImage(img, state.name, { x: crop[0], y: crop[1], w: crop[2], h: crop[3] }, state.credit);
+                }
+                if (isFinite(position)) {
+                    if (settings.direction === 'row') {
+                        state.y = clamp(position, 0, state.height - 1);
+                    } else {
+                        state.x = clamp(position, 0, state.width - 1);
+                    }
+                }
+                applySettings(settings);
+            }, sample);
+            return true;
+        }
+
+        var bytes = null;
+        try { bytes = fromBase64Url(params.get('l')); } catch (e) { /* invalid link */ }
+        if (!bytes || bytes.length < 3 || bytes.length % 3) {
+            toast('That link couldn’t be opened');
+            return false;
+        }
+        var dims = parseDims(params.get('m')) || { width: 1600, height: 1000 };
+        settings.thickness = 1;
+        stripesImageUrl(bytes, settings.direction, dims, function (url) {
+            loadImage(url, 'shared-stripes', function (ok) {
+                URL.revokeObjectURL(url);
+                if (ok) { applySettings(settings); }
+            }, SHARED_CREDIT);
+        });
+        return true;
+    };
+
+    els.shareBtn.addEventListener('click', share);
+    window.addEventListener('hashchange', function () { openShare(location.hash); });
+
     // Lets print.js render the current stripes at print sizes.
     window.colourio = {
         render: function (width, height) {
@@ -1120,7 +1299,9 @@
     };
 
     var samples = window.COLOURIO_SAMPLES || [];
-    if (samples.length) {
+    if (openShare(location.hash)) {
+        // The share link loads its own image.
+    } else if (samples.length) {
         window.colourio.loadSample(samples[0]);
     } else {
         loadImage(SAMPLE_IMAGE, 'sample');
