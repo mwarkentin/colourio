@@ -8,11 +8,15 @@
 
     var CONFIG = {
         zazzle: {
-            // Your Zazzle member account ID (required) and associate ID
-            // (credits referred sales); both are 18-digit numbers from your
-            // Zazzle account.
+            // Your Zazzle member account ID (required), an 18-digit number.
             memberId: '',
-            associateId: '',
+            // Your Ambassador ID, sent as rf= to mark links as referrals.
+            // Optional: under the Ambassador Program Agreement, links with
+            // rf= count as Cross-Promotion Links (15% on wall art), while
+            // links to your own Create-a-Product pages without it may count
+            // as Self-Promotion Links (40%). Confirm with Zazzle which
+            // applies, and leave this blank if rf= should be left out.
+            ambassadorId: '',
             // Shown against sales in your Zazzle referral history.
             trackingCode: 'colourio',
             domain: 'zazzle.com'
@@ -87,7 +91,7 @@
     var zazzleUrl = function (product, imageUrl, imageCode) {
         var memberId = CONFIG.zazzle.memberId || 'YOUR_MEMBER_ID';
         var params = new URLSearchParams();
-        params.set('rf', CONFIG.zazzle.associateId || 'YOUR_ASSOCIATE_ID');
+        if (CONFIG.zazzle.ambassadorId) { params.set('rf', CONFIG.zazzle.ambassadorId); }
         params.set('ax', 'Linkover');
         params.set('pd', product.productId || 'YOUR_PRODUCT_ID');
         params.set('ed', 'true');

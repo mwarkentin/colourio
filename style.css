@@ -1031,6 +1031,12 @@ input[type="range"]:focus-visible::-moz-range-thumb {
     font-variant-numeric: tabular-nums;
 }
 
+.print-disclosure {
+    margin: -6px 0 0;
+    color: var(--muted);
+    font-size: 12px;
+}
+
 .print-demo {
     padding: 10px 12px;
     border: 1px dashed var(--border-strong);

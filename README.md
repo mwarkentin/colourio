@@ -84,7 +84,8 @@ startup.
 **Order a print** renders the current stripes as a print-resolution PNG for the
 chosen product, uploads it to Cloudinary, and opens Zazzle's product page with
 the image on it. Zazzle handles checkout, printing and shipping, and referred
-sales earn on your Zazzle associate account.
+sales earn through your Zazzle Ambassador account. The dialog tells buyers that
+colourio earns a commission on orders.
 
 Out of the box it runs in **demo mode**: nothing is uploaded, and the dialog
 shows the print file and the Zazzle link it would open. To go live, follow
@@ -92,14 +93,16 @@ Zazzle's [Create-a-Product API guide](https://www.zazzle.com/api) and fill in
 `CONFIG` at the top of `print.js`:
 
 1. **Zazzle account:** sign up, join the
-   [Associates Program](https://www.zazzle.com/my/associate/associate) and
+   [Ambassador Program](https://www.zazzle.com/my/associate/associate)
+   (formerly the Associates Program) and
    [accept the API terms](https://www.zazzle.com/my/associate/create_a_product_api_signup).
-   Put your member account ID in `zazzle.memberId` and your associate ID in
-   `zazzle.associateId` (both 18-digit numbers).
-2. **Declare the image domain:** add `res.cloudinary.com` on the
+   Put your member account ID in `zazzle.memberId` (an 18-digit number).
+2. **Ask Zazzle which commission applies:** see [Commission](#commission)
+   below, then set or leave out `zazzle.ambassadorId`.
+3. **Declare the image domain:** add `res.cloudinary.com` on the
    [domains page](https://www.zazzle.com/my/associate/domains). Zazzle refuses
    images from undeclared domains.
-3. **Store and templates:** [create a store](https://www.zazzle.com/my/store/create),
+4. **Store and templates:** [create a store](https://www.zazzle.com/my/store/create),
    then for each product make a design with an image placeholder the same shape
    as the product. Turn on **Make this a template object**, note its **URL
    Parameter Name** (default `image1`, goes in `imageParam`), and set fit/fill to
@@ -107,20 +110,50 @@ Zazzle's [Create-a-Product API guide](https://www.zazzle.com/api) and fill in
    Yes. Copy the 18-digit number at the end of the product's URL into
    `productId`. Templates can't be edited once posted, so test one before making
    the rest.
-4. **Image hosting:** Zazzle fetches the image from a public URL. Create a
+5. **Image hosting:** Zazzle fetches the image from a public URL. Create a
    Cloudinary account, add an **unsigned** upload preset (Settings → Upload),
    and set `cloudinary.cloudName` and `cloudinary.uploadPreset`. Anyone who
    reads the page source can use an unsigned preset, so restrict it to PNGs, a
    size limit and a folder.
-5. **Test:** generate a link and compare it with Zazzle's
+6. **Test:** generate a link and compare it with Zazzle's
    [link builder](https://www.zazzle.com/my/associate/create) (Create a
    Template Link).
 
 The link follows the guide's 1-to-1 template format:
-`https://www.zazzle.com/api/create/at-{memberId}?rf={associateId}&ax=Linkover&pd={productId}&ed=true&tc=colourio&ic={image code}&t_image1_iid={encoded image URL}`.
-Once live, the dialog also shows Zazzle's RealView mockup of the product.
-Products without a `productId` stay in demo mode, so you can go live one
-product at a time.
+`https://www.zazzle.com/api/create/at-{memberId}?rf={ambassadorId}&ax=Linkover&pd={productId}&ed=true&tc=colourio&ic={image code}&t_image1_iid={encoded image URL}`,
+with `rf` left out when `ambassadorId` is blank. Once live, the dialog also
+shows Zazzle's RealView mockup of the product. Products without a `productId`
+stay in demo mode, so you can go live one product at a time.
+
+### Commission
+
+Under Zazzle's
+[Ambassador Program Agreement](https://www.zazzle.com/terms/ambassadors_agreement)
+(effective April 2025), the link type sets the rate. For Wall Art & Décor,
+**Self-Promotion Links** to your own products, which may include
+Create-a-Product API pages, earn 40% of net sales (royalty plus commission) but
+must not carry referral parameters such as `rf=`. **Cross-Promotion Links**
+carrying your Ambassador ID earn 15%. API links always carry parameters (the
+product and image), so ask Zazzle Developer Support (api.help@zazzle.com) which
+rate a linkover to your own template earns, and whether to drop `rf`. See the
+[commission table](https://www.zazzle.com/hc/article/ambassador_referral_commissions_creator_royalties-30810357489175)
+for current rates.
+
+Other terms worth knowing:
+
+- **No prices** on your site: Zazzle sets and changes them.
+- **Brand use:** no paid ads or keyword bids on "Zazzle", no "Zazzle" in a
+  domain, no implied partnership, and logos only under Zazzle's trademark
+  guidelines.
+- **Disclosure:** the print dialog says colourio earns a commission. Keep it
+  if you change the dialog.
+- **Payouts** are on net sales (excluding shipping, tax and refunds) after
+  delivery and payment, tracked by a 45-day cookie. Your own test orders may
+  not earn anything.
+- **Royalties** above the standard rate can incur Excess Royalty Fees; see the
+  Creator License Agreement before raising yours.
+- **Terms** can change on 48 hours' notice, and violations can forfeit earned
+  commissions.
 
 ## Controls
 
