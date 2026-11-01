@@ -1,0 +1,26 @@
+name: Nanoleaf script
+
+on:
+  push:
+    paths:
+      - 'nanoleaf/**'
+      - '.github/workflows/nanoleaf.yml'
+  pull_request:
+    paths:
+      - 'nanoleaf/**'
+      - '.github/workflows/nanoleaf.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Test the Nanoleaf script
+        run: node --test "nanoleaf/test/*.test.mjs"

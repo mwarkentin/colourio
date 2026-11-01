@@ -213,6 +213,15 @@ Other terms worth knowing:
 - **Terms** can change on 48 hours' notice, and violations can forfeit earned
   commissions.
 
+## Nanoleaf
+
+`nanoleaf/nanoleaf.mjs` shows a colourio gradient on Nanoleaf lights, such as
+a Skylight: click **Copy CSS**, then run
+`node nanoleaf/nanoleaf.mjs send` on a computer on the same Wi-Fi. Each panel
+gets the average colour of its stretch of the gradient, or with `--drift` the
+gradient flows along the panels. See [nanoleaf/README.md](nanoleaf/README.md)
+to pair it with your lights.
+
 ## Controls
 
 - **Hover** to sample, **click** to lock / unlock (drag on touch screens)
