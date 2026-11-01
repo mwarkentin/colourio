@@ -16,6 +16,14 @@
         openBtn: $('openBtn'),
         emptyOpenBtn: $('emptyOpenBtn'),
         downloadBtn: $('downloadBtn'),
+        shareBtn: $('shareBtn'),
+        shareDialog: $('shareDialog'),
+        shareCloseBtn: $('shareCloseBtn'),
+        shareLinkBtn: $('shareLinkBtn'),
+        shareLinkName: $('shareLinkName'),
+        shareLinkDesc: $('shareLinkDesc'),
+        shareFileBtn: $('shareFileBtn'),
+        shareFileName: $('shareFileName'),
         printBtn: $('printBtn'),
         snapshotBtn: $('snapshotBtn'),
         cssBtn: $('cssBtn'),
@@ -151,11 +159,11 @@
         var img = new Image();
         img.onload = function () {
             setImage(img, name, null, credit);
-            if (onDone) { onDone(); }
+            if (onDone) { onDone(!!state.pixels); }
         };
         img.onerror = function () {
             toast("Couldn't read that image");
-            if (onDone) { onDone(); }
+            if (onDone) { onDone(false); }
         };
         img.src = src;
     };
@@ -165,9 +173,13 @@
             toast('That doesn’t look like an image');
             return;
         }
-        var url = URL.createObjectURL(file);
-        loadImage(url, file.name || 'pasted-image', function () {
-            URL.revokeObjectURL(url);
+        // A colourio session file restores its settings once the image loads.
+        readSession(file).then(function (session) {
+            var url = URL.createObjectURL(file);
+            loadImage(url, file.name || 'pasted-image', function (ok) {
+                URL.revokeObjectURL(url);
+                if (ok && session) { restoreSession(session); }
+            }, session && session.credit);
         });
     };
 
@@ -218,7 +230,7 @@
         els.readout.hidden = false;
         els.preview.hidden = false;
         els.previewPlaceholder.hidden = true;
-        [els.downloadBtn, els.snapshotBtn, els.cssBtn, els.printBtn].forEach(function (btn) { btn.disabled = false; });
+        [els.downloadBtn, els.shareBtn, els.snapshotBtn, els.cssBtn, els.printBtn].forEach(function (btn) { btn.disabled = false; });
 
         layout();
         render();
@@ -606,6 +618,12 @@
 
         state.x = settings.x;
         state.y = settings.y;
+        applySettings(settings);
+        els.stage.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    };
+
+    // Sets the sampling controls and locks the line where it is.
+    var applySettings = function (settings) {
         state.direction = settings.direction;
         state.thickness = settings.thickness;
         state.blend = settings.blend;
@@ -621,7 +639,6 @@
 
         layout();
         render();
-        els.stage.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     };
 
     var clearSnapshots = function () {
@@ -1100,6 +1117,355 @@
     }).observe(els.stage);
     window.addEventListener('resize', layout);
 
+    // ======================================================================
+    // Share links
+    // ======================================================================
+
+    // A link records the session in its #fragment. Samples are shared by
+    // id, crop and position, so the link reopens the whole session. Other
+    // images can't travel in a link, so their sampled line is encoded
+    // instead and the recipient gets the same stripes, just not the photo.
+    var SHARE_VERSION = '1';
+    var SHARE_LINE_MAX = 1024;
+    var SHARED_STRIPES_MAX = 6000;
+    var SHARED_CREDIT = { id: null, title: 'Shared stripes', credit: 'the original image isn’t included in the link' };
+
+    var toBase64Url = function (bytes) {
+        var text = '';
+        for (var i = 0; i < bytes.length; i++) { text += String.fromCharCode(bytes[i]); }
+        return btoa(text).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    };
+
+    var fromBase64Url = function (text) {
+        var raw = atob(text.replace(/-/g, '+').replace(/_/g, '/'));
+        var bytes = new Uint8Array(raw.length);
+        for (var i = 0; i < raw.length; i++) { bytes[i] = raw.charCodeAt(i); }
+        return bytes;
+    };
+
+    var findSample = function (id) {
+        return (window.COLOURIO_SAMPLES || []).filter(function (sample) { return sample.id === id; })[0];
+    };
+
+    var shareUrl = function () {
+        var params = new URLSearchParams();
+        var sample = sampleLine();
+        params.set('v', SHARE_VERSION);
+        params.set('d', state.direction);
+        params.set('b', state.blend);
+        params.set('o', state.size);
+
+        if (state.credit && state.credit.id && findSample(state.credit.id)) {
+            params.set('s', state.credit.id);
+            params.set('p', state.direction === 'row' ? state.y : state.x);
+            params.set('t', state.thickness);
+            if (state.crop) {
+                params.set('c', [state.crop.x, state.crop.y, state.crop.w, state.crop.h].join('_'));
+            }
+        } else {
+            var count = Math.min(sample.length, SHARE_LINE_MAX);
+            var colours = resample(sample.line, sample.length, count, false);
+            var bytes = new Uint8Array(count * 3);
+            for (var i = 0; i < count; i++) {
+                bytes[i * 3] = colours[i * 4];
+                bytes[i * 3 + 1] = colours[i * 4 + 1];
+                bytes[i * 3 + 2] = colours[i * 4 + 2];
+            }
+            params.set('l', toBase64Url(bytes));
+            params.set('m', state.naturalWidth + 'x' + state.naturalHeight);
+        }
+        return location.href.split('#')[0] + '#' + params;
+    };
+
+    var share = function () {
+        if (!state.pixels) { return; }
+        var url = shareUrl();
+        var stripesOnly = url.indexOf('&l=') !== -1;
+        if (navigator.share && window.matchMedia('(pointer: coarse)').matches) {
+            if (stripesOnly) { toast('The link shares the stripes, not your image'); }
+            navigator.share({ title: 'colourio', url: url }).catch(function () {});
+            return;
+        }
+        copyText(url).then(function () {
+            toast(stripesOnly ? 'Link copied · it shares the stripes, not your image' : 'Link copied');
+        }, function () {
+            toast('Couldn’t copy the link');
+        });
+    };
+
+    var parseDims = function (text) {
+        var match = /^(\d{1,5})x(\d{1,5})$/.exec(text || '');
+        return match && +match[1] > 0 && +match[2] > 0 ? { width: +match[1], height: +match[2] } : null;
+    };
+
+    // Builds an image whose every row (or column) is the shared line, so the
+    // rest of the app treats it like any other source.
+    var stripesImageUrl = function (bytes, direction, dims, callback) {
+        var count = bytes.length / 3;
+        var line = new Uint8ClampedArray(count * 4);
+        for (var i = 0; i < count; i++) {
+            line[i * 4] = bytes[i * 3];
+            line[i * 4 + 1] = bytes[i * 3 + 1];
+            line[i * 4 + 2] = bytes[i * 3 + 2];
+            line[i * 4 + 3] = 255;
+        }
+        var scale = Math.min(1, SHARED_STRIPES_MAX / Math.max(dims.width, dims.height));
+        var width = Math.max(1, Math.round(dims.width * scale));
+        var height = Math.max(1, Math.round(dims.height * scale));
+        var isRow = direction === 'row';
+        var length = isRow ? width : height;
+        var pixels = resample(line, count, length, false);
+
+        lineCanvas.width = isRow ? length : 1;
+        lineCanvas.height = isRow ? 1 : length;
+        lineContext.putImageData(new ImageData(pixels, lineCanvas.width, lineCanvas.height), 0, 0);
+        var canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        var context = canvas.getContext('2d');
+        context.imageSmoothingEnabled = false;
+        context.drawImage(lineCanvas, 0, 0, width, height);
+        canvas.toBlob(function (blob) { callback(URL.createObjectURL(blob)); }, 'image/png');
+    };
+
+    // Opens the session described by a share link's fragment. Returns false
+    // if the fragment isn't a share link, so startup can load the default.
+    var openShare = function (hash) {
+        var params = new URLSearchParams((hash || '').replace(/^#/, ''));
+        if (!params.has('s') && !params.has('l')) { return false; }
+
+        var size = params.get('o');
+        var settings = {
+            direction: params.get('d') === 'column' ? 'column' : 'row',
+            blend: params.get('b') === 'crisp' ? 'crisp' : 'smooth',
+            size: Array.prototype.some.call(els.size.options, function (o) { return o.value === size; }) ? size : 'match',
+            thickness: clamp(parseInt(params.get('t'), 10) || 1, 1, +els.thickness.max)
+        };
+
+        if (params.has('s')) {
+            var sample = findSample(params.get('s'));
+            if (!sample) {
+                toast('That sample isn’t available any more');
+                return false;
+            }
+            var crop = (params.get('c') || '').split('_').map(Number);
+            var position = parseInt(params.get('p'), 10);
+            loadImage(sample.file, sample.id, function (ok) {
+                if (!ok) { return; }
+                var img = state.img;
+                if (crop.length === 4 && crop.every(function (n) { return n >= 0 && Math.floor(n) === n; }) &&
+                        crop[2] > 0 && crop[3] > 0 &&
+                        crop[0] + crop[2] <= img.naturalWidth && crop[1] + crop[3] <= img.naturalHeight) {
+                    setImage(img, state.name, { x: crop[0], y: crop[1], w: crop[2], h: crop[3] }, state.credit);
+                }
+                if (isFinite(position)) {
+                    if (settings.direction === 'row') {
+                        state.y = clamp(position, 0, state.height - 1);
+                    } else {
+                        state.x = clamp(position, 0, state.width - 1);
+                    }
+                }
+                applySettings(settings);
+            }, sample);
+            return true;
+        }
+
+        var bytes = null;
+        try { bytes = fromBase64Url(params.get('l')); } catch (e) { /* invalid link */ }
+        if (!bytes || bytes.length < 3 || bytes.length % 3) {
+            toast('That link couldn’t be opened');
+            return false;
+        }
+        var dims = parseDims(params.get('m')) || { width: 1600, height: 1000 };
+        settings.thickness = 1;
+        stripesImageUrl(bytes, settings.direction, dims, function (url) {
+            loadImage(url, 'shared-stripes', function (ok) {
+                URL.revokeObjectURL(url);
+                if (ok) { applySettings(settings); }
+            }, SHARED_CREDIT);
+        });
+        return true;
+    };
+
+    // ======================================================================
+    // Session files
+    // ======================================================================
+
+    // A session file is a JPEG of the current (cropped) source with the
+    // session's settings in a comment segment. Opened in colourio it restores
+    // the session; anywhere else it's an ordinary photo.
+    var SESSION_PREFIX = 'colourio-session:';
+    var SESSION_FILE_MAX = 2048;
+    var SESSION_READ_BYTES = 262144;
+    var CREDIT_FIELDS = ['title', 'credit', 'date', 'source', 'url', 'license'];
+
+    var buildSessionFile = function (callback) {
+        var scale = Math.min(1, SESSION_FILE_MAX / Math.max(state.width, state.height));
+        var canvas = document.createElement('canvas');
+        canvas.width = Math.max(1, Math.round(state.width * scale));
+        canvas.height = Math.max(1, Math.round(state.height * scale));
+        canvas.getContext('2d').drawImage(els.source, 0, 0, canvas.width, canvas.height);
+
+        var data = {
+            v: 1,
+            d: state.direction,
+            b: state.blend,
+            o: state.size,
+            t: Math.max(1, Math.round(state.thickness * scale)),
+            p: Math.round((state.direction === 'row' ? state.y : state.x) * scale),
+            m: state.naturalWidth + 'x' + state.naturalHeight
+        };
+        if (state.credit && state.credit.title) {
+            data.credit = {};
+            CREDIT_FIELDS.forEach(function (key) {
+                if (state.credit[key]) { data.credit[key] = state.credit[key]; }
+            });
+        }
+
+        canvas.toBlob(function (blob) {
+            blob.arrayBuffer().then(function (buffer) {
+                var jpeg = new Uint8Array(buffer);
+                var payload = new TextEncoder().encode(SESSION_PREFIX + JSON.stringify(data));
+                // COM segment: FF FE, then a big-endian length that counts itself.
+                var segment = new Uint8Array(4 + payload.length);
+                segment[0] = 0xFF;
+                segment[1] = 0xFE;
+                segment[2] = (payload.length + 2) >> 8;
+                segment[3] = (payload.length + 2) & 0xFF;
+                segment.set(payload, 4);
+                callback(new File([jpeg.subarray(0, 2), segment, jpeg.subarray(2)],
+                    state.name + '-colourio.jpg', { type: 'image/jpeg' }));
+            });
+        }, 'image/jpeg', 0.9);
+    };
+
+    // Finds a colourio comment among the JPEG's header segments.
+    var parseSessionComment = function (bytes) {
+        if (bytes[0] !== 0xFF || bytes[1] !== 0xD8) { return null; }
+        var i = 2;
+        while (i + 4 <= bytes.length && bytes[i] === 0xFF) {
+            var marker = bytes[i + 1];
+            if (marker === 0xDA || marker === 0xD9) { break; }
+            var length = (bytes[i + 2] << 8) | bytes[i + 3];
+            if (length < 2) { break; }
+            if (marker === 0xFE) {
+                var text = new TextDecoder().decode(bytes.subarray(i + 4, i + 2 + length));
+                if (text.indexOf(SESSION_PREFIX) === 0) {
+                    try { return JSON.parse(text.slice(SESSION_PREFIX.length)); } catch (e) { return null; }
+                }
+            }
+            i += 2 + length;
+        }
+        return null;
+    };
+
+    // Validates everything read from a file before it's used.
+    var sessionSettings = function (data) {
+        if (!data || data.v !== 1) { return null; }
+        var size = typeof data.o === 'string' ? data.o : '';
+        var credit = null;
+        if (data.credit && typeof data.credit === 'object') {
+            credit = { id: null };
+            CREDIT_FIELDS.forEach(function (key) {
+                credit[key] = typeof data.credit[key] === 'string' ? data.credit[key].slice(0, 200) : '';
+            });
+            if (!/^https:\/\//.test(credit.url)) { credit.url = ''; }
+            if (!credit.title) { credit = null; }
+        }
+        return {
+            direction: data.d === 'column' ? 'column' : 'row',
+            blend: data.b === 'crisp' ? 'crisp' : 'smooth',
+            size: Array.prototype.some.call(els.size.options, function (o) { return o.value === size; }) ? size : 'match',
+            thickness: clamp(parseInt(data.t, 10) || 1, 1, +els.thickness.max),
+            position: Number.isInteger(data.p) ? data.p : null,
+            match: parseDims(data.m),
+            credit: credit
+        };
+    };
+
+    var readSession = function (file) {
+        if (file.type !== 'image/jpeg' || !file.arrayBuffer) { return Promise.resolve(null); }
+        return file.slice(0, SESSION_READ_BYTES).arrayBuffer().then(function (buffer) {
+            return sessionSettings(parseSessionComment(new Uint8Array(buffer)));
+        }).catch(function () { return null; });
+    };
+
+    var restoreSession = function (settings) {
+        // Keep "Match source image" at the original size, not the file's.
+        var match = settings.match;
+        if (match && Math.abs(match.width / match.height - state.width / state.height) < 0.01) {
+            state.naturalWidth = match.width;
+            state.naturalHeight = match.height;
+        }
+        if (settings.position !== null) {
+            if (settings.direction === 'row') {
+                state.y = clamp(settings.position, 0, state.height - 1);
+            } else {
+                state.x = clamp(settings.position, 0, state.width - 1);
+            }
+        }
+        applySettings(settings);
+        toast('Session restored');
+    };
+
+    // ======================================================================
+    // Share dialog
+    // ======================================================================
+
+    var pendingFile = null;
+    var canShareFiles = !!(navigator.canShare && window.File &&
+        navigator.canShare({ files: [new File([''], 'test.jpg', { type: 'image/jpeg' })] }));
+    var canShareLinks = !!navigator.share && window.matchMedia('(pointer: coarse)').matches;
+
+    var openShareDialog = function () {
+        if (!state.pixels) { return; }
+        var stripesOnly = !(state.credit && state.credit.id && findSample(state.credit.id));
+        els.shareLinkName.textContent = canShareLinks ? 'Share link' : 'Copy link';
+        els.shareLinkDesc.textContent = stripesOnly
+            ? 'Shares the stripes and palette. Your photo stays on your device.'
+            : 'Reopens this exact session.';
+        els.shareFileName.textContent = canShareFiles ? 'Share photo with session' : 'Download session file';
+        els.shareFileBtn.disabled = true;
+        pendingFile = null;
+        // Build the file now: Safari only opens the share sheet straight
+        // from a tap, so it has to be ready when the button is pressed.
+        buildSessionFile(function (file) {
+            pendingFile = file;
+            els.shareFileBtn.disabled = false;
+        });
+        els.shareDialog.showModal();
+    };
+
+    var shareSessionFile = function () {
+        var file = pendingFile;
+        if (!file) { return; }
+        els.shareDialog.close();
+        if (canShareFiles) {
+            navigator.share({
+                files: [file],
+                title: 'colourio session',
+                text: 'Open this image in colourio to pick up where I left off: ' + location.href.split('#')[0]
+            }).catch(function () {});
+            return;
+        }
+        var url = URL.createObjectURL(file);
+        downloadUrl(url, file.name);
+        setTimeout(function () { URL.revokeObjectURL(url); }, 10000);
+        toast('Session file downloaded · open it in colourio to pick up where you left off');
+    };
+
+    els.shareBtn.addEventListener('click', openShareDialog);
+    els.shareLinkBtn.addEventListener('click', function () {
+        els.shareDialog.close();
+        share();
+    });
+    els.shareFileBtn.addEventListener('click', shareSessionFile);
+    els.shareCloseBtn.addEventListener('click', function () { els.shareDialog.close(); });
+    els.shareDialog.addEventListener('click', function (e) {
+        if (e.target === els.shareDialog) { els.shareDialog.close(); }
+    });
+    window.addEventListener('hashchange', function () { openShare(location.hash); });
+
     // Lets print.js render the current stripes at print sizes.
     window.colourio = {
         render: function (width, height) {
@@ -1120,7 +1486,9 @@
     };
 
     var samples = window.COLOURIO_SAMPLES || [];
-    if (samples.length) {
+    if (openShare(location.hash)) {
+        // The share link loads its own image.
+    } else if (samples.length) {
         window.colourio.loadSample(samples[0]);
     } else {
         loadImage(SAMPLE_IMAGE, 'sample');

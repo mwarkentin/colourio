@@ -749,6 +749,7 @@ input[type="range"]:focus-visible::-moz-range-thumb {
     margin: 12px 0 0;
     color: var(--muted);
     font-size: 12px;
+    overflow-wrap: anywhere;
 }
 
 .credit a {
@@ -1087,6 +1088,79 @@ input[type="range"]:focus-visible::-moz-range-thumb {
 
 @keyframes spin {
     to { transform: rotate(360deg); }
+}
+
+/* ==========================================================================
+   Share dialog
+   ========================================================================== */
+
+.share-dialog {
+    width: min(480px, calc(100vw - 32px));
+}
+
+.share-options {
+    display: grid;
+    gap: 10px;
+}
+
+.share-option {
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+    padding: 14px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--panel-2);
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+    transition: border-color 0.15s;
+}
+
+.share-option:hover:not(:disabled) {
+    border-color: var(--border-strong);
+}
+
+.share-option:disabled {
+    opacity: 0.55;
+    cursor: progress;
+}
+
+.share-icon {
+    display: grid;
+    flex: none;
+    place-items: center;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: var(--accent);
+    color: var(--accent-text);
+}
+
+.share-icon svg {
+    width: 18px;
+    height: 18px;
+}
+
+.share-text {
+    display: grid;
+    gap: 2px;
+}
+
+.share-name {
+    font-weight: 600;
+}
+
+.share-desc {
+    color: var(--muted);
+    font-size: 13px;
+}
+
+.share-note {
+    margin: 0;
+    color: var(--muted);
+    font-size: 12px;
 }
 
 /* ==========================================================================

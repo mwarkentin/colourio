@@ -23,6 +23,10 @@
                     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4m0 0L7 9m5-5 5 5M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></svg>
                     <span>Open image</span>
                 </button>
+                <button type="button" class="btn" id="shareBtn" disabled>
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.6 13.5 6.8 4M15.4 6.5l-6.8 4"/></svg>
+                    <span>Share</span>
+                </button>
                 <button type="button" class="btn btn-primary" id="downloadBtn" disabled>
                     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v12m0 0-5-5m5 5 5-5M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></svg>
                     <span>Download PNG</span>
@@ -250,6 +254,38 @@
                     <button type="button" class="btn" id="samplesRandomBtn">Surprise me</button>
                 </div>
                 <div class="samples-grid" id="samplesGrid"></div>
+            </div>
+        </dialog>
+
+        <dialog class="dialog share-dialog" id="shareDialog" aria-labelledby="shareTitle">
+            <div class="dialog-sheet">
+                <div class="dialog-head">
+                    <h2 id="shareTitle">Share</h2>
+                    <button type="button" class="icon-btn" id="shareCloseBtn" aria-label="Close">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
+                    </button>
+                </div>
+                <div class="share-options">
+                    <button type="button" class="share-option" id="shareLinkBtn">
+                        <span class="share-icon" aria-hidden="true">
+                            <svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/></svg>
+                        </span>
+                        <span class="share-text">
+                            <span class="share-name" id="shareLinkName">Copy link</span>
+                            <span class="share-desc" id="shareLinkDesc"></span>
+                        </span>
+                    </button>
+                    <button type="button" class="share-option" id="shareFileBtn" disabled>
+                        <span class="share-icon" aria-hidden="true">
+                            <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.1-3.1a2 2 0 0 0-2.8 0L6 21"/></svg>
+                        </span>
+                        <span class="share-text">
+                            <span class="share-name" id="shareFileName">Share photo with session</span>
+                            <span class="share-desc">Sends the image with your settings saved inside. Open it in colourio to pick up where you left off.</span>
+                        </span>
+                    </button>
+                </div>
+                <p class="share-note">Some chat apps recompress photos and drop the saved settings. The photo still opens; send it as a file, or by AirDrop or email, to keep the session.</p>
             </div>
         </dialog>
 

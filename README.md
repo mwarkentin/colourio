@@ -28,6 +28,30 @@ Every push to `master` deploys the site to GitHub Pages via
 add any new site files to the "Collect site files" step. You can also run the
 workflow by hand from the Actions tab.
 
+## Sharing
+
+**Share** offers two ways to pass a session on. Neither uploads anything.
+
+**Link** (copied, or the share sheet on phones). Everything lives in the link's
+`#fragment`:
+
+- **Samples** are shared by id along with the crop, line position, thickness,
+  direction, blend and output size, so the link reopens the whole session
+  exactly.
+- **Your own images** can't fit in a link, so it carries the sampled line
+  instead (up to 1024 colours, about 4 KB) plus the output size. The recipient
+  gets the same stripes, palette and download, but not your photo.
+
+**Photo with session.** A JPEG of the current (cropped) image, up to 2048px,
+with the session's settings stored in a JPEG comment: direction, blend,
+thickness, line position, output size and any sample credit. Where the browser
+can share files (Safari, Chrome on Android and Windows) it goes to the share
+sheet, so AirDrop, Messages or Mail can send the photo directly; elsewhere it
+downloads. Dropping, pasting or opening the file in colourio restores the
+session, and anywhere else it's an ordinary photo. Re-encoding drops the
+original photo's metadata, such as GPS location. Chat apps that recompress
+photos may strip the settings; the photo still opens.
+
 ## Samples
 
 **Samples** opens a gallery of images with striking palettes, filterable by
@@ -98,6 +122,7 @@ product at a time.
 - **↑ ↓** (or **← →**) nudge the locked line, **Shift** for 10px steps
 - **S** saves a snapshot; click a snapshot's label to restore its position and settings
 - **Drop** or **paste** an image anywhere to load it
+- **Share** copies a link to the session, or sends the photo with the session saved inside it
 - **Crop** (next to the lock) trims the source: drag the box or its handles, or drag
   on the image to draw a new box; pick an aspect ratio; **Enter** applies, **Esc** cancels.
   Cropping isn't destructive, so you can reopen it and widen the box again
