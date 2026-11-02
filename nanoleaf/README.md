@@ -49,9 +49,10 @@ the gradient to start. If it's at the other end, add `--reverse`.
 Options:
 
 - `--drift`: instead of holding still, the gradient flows along the panels
-  and back, so every part of it passes across the ceiling. Each panel fades
-  smoothly from one colour to the next.
-- `--cycle <seconds>`: how long one flow takes, out and back (default 60).
+  and back. Every panel passes through all of it, 24 colours each way,
+  fading smoothly from one to the next.
+- `--cycle <seconds>`: about how long one flow takes, out and back (default
+  60).
 - `--reverse`: start the gradient at the other end of the panels.
 - `--save <name>`: also save it as a scene on the lights, rather than only
   showing it. Whether saved scenes show up in the Nanoleaf app hasn't been
@@ -68,8 +69,14 @@ shows one colour: the average of the part of the gradient it covers. So three
 panels in a line show the gradient's first, middle and last thirds. Panels
 side by side across the line share a colour.
 
+With `--drift`, the gradient is cut into 24 colours (as many as colourio's
+Copy CSS gives) and each panel steps through all of them, out and back. The
+panels stay as far apart in the gradient as they are on the ceiling: with
+three in a line, each is a third of the way along from the next, so the
+colours visibly flow from one panel to the next.
+
 Each Skylight panel shows a single colour, lit from its edges, so gradients
-are coarse with few panels. `--drift` shows more of the gradient over time.
+are coarse with few panels. `--drift` shows all of it over time.
 Dark gradients make dim panels; the lights' overall brightness stays as set
 in the Nanoleaf app.
 

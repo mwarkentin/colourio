@@ -12,7 +12,8 @@ import { after, before, beforeEach, describe, test } from 'node:test';
 import { promisify } from 'node:util';
 
 import {
-  baseUrl, buildEffect, colourAt, driftFrames, getLayout, pair, panelSlices, parseGradient, sendEffect, stillColours,
+  baseUrl, buildEffect, colourAt, DRIFT_STEPS, driftFrames, getLayout, gradientColours, pair, panelSlices, parseGradient,
+  sendEffect, stillColours,
 } from '../lib.mjs';
 
 const CLI = new URL('../nanoleaf.mjs', import.meta.url).pathname;
@@ -152,15 +153,37 @@ describe('colours', () => {
     ]);
   });
 
-  test('drift: start where the still does, flow without a seam', () => {
-    const stops = parseGradient(RED_GREEN_BLUE);
-    const slices = panelSlices(SKYLIGHT);
-    const frames = driftFrames(stops, slices, 24);
+  test('drift: every panel shows every colour, not just its third', () => {
+    const frames = driftFrames(parseGradient(RED_GREEN_BLUE), panelSlices(SKYLIGHT));
     assert.equal(frames.length, 3);
-    assert.ok(frames.every((p) => p.colours.length === 24));
-    assert.deepEqual(frames.map((p) => p.colours[0]), stillColours(stops, slices).map((p) => p.colour));
-    // Halfway round, the mirrored gradient puts blue on the first panel.
-    assert.deepEqual(frames[0].colours[12], stillColours(stops, slices)[2].colour);
+    for (const panel of frames) {
+      assert.equal(panel.colours.length, DRIFT_STEPS * 2, 'out and back');
+      for (const channel of ['r', 'g', 'b']) {
+        assert.ok(Math.max(...panel.colours.map((c) => c[channel])) >= 240, `panel ${panel.id} reaches pure ${channel}`);
+      }
+    }
+  });
+
+  test('drift: panels keep their spacing and the loop has no jumps', () => {
+    const distance = (a, b) => Math.max(Math.abs(a.r - b.r), Math.abs(a.g - b.g), Math.abs(a.b - b.b));
+    const frames = driftFrames(parseGradient(RED_GREEN_BLUE), panelSlices(SKYLIGHT));
+    // The middle panel starts at the gradient's midpoint: green.
+    assert.ok(distance(frames[1].colours[0], { r: 0, g: 255, b: 0 }) <= 10, JSON.stringify(frames[1].colours[0]));
+    // The first panel sits a third of the gradient behind, so it reaches
+    // that green a third of 24 steps later.
+    assert.ok(distance(frames[0].colours[DRIFT_STEPS / 3], frames[1].colours[0]) <= 1);
+    // Each frame, including last back to first, is a small step.
+    for (const panel of frames) {
+      panel.colours.forEach((c, k) => {
+        assert.ok(distance(c, panel.colours[(k + 1) % panel.colours.length]) <= 50, `panel ${panel.id} frame ${k}`);
+      });
+    }
+  });
+
+  test('describe the gradient as 24 colours', () => {
+    const colours = gradientColours(parseGradient('#000000 #ffffff'));
+    assert.equal(colours.length, 24);
+    assert.ok(colours[0].r < colours[23].r);
   });
 });
 
@@ -253,6 +276,7 @@ describe('command line', () => {
     device.requests = [];
     const drift = await cli('send', RED_GREEN_BLUE, '--drift', '--cycle', '30', '--save', 'Flow');
     assert.match(drift.stdout, /Saved as “Flow” and showing \(flowing, 30s a cycle\)/);
+    assert.match(drift.stdout, /Each panel flows through these 24 colours and back/);
     const puts = device.requests.filter((r) => r.method === 'PUT').map((r) => r.body);
     assert.equal(puts[0].write.animType, 'custom');
     assert.deepEqual(puts[1], { select: 'Flow' });

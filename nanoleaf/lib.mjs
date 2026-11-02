@@ -118,21 +118,36 @@ export function stillColours(stops, slices) {
   return slices.map((s) => ({ id: s.id, colour: average((t) => colourAt(stops, t), s.from, s.to) }));
 }
 
+// Steps through the gradient each way when drifting, matching the 24 stops
+// in colourio's Copy CSS.
+export const DRIFT_STEPS = 24;
+
+// The gradient as `count` colours, each the average of an equal stretch.
+export function gradientColours(stops, count = DRIFT_STEPS) {
+  return Array.from({ length: count }, (_, i) => average((t) => colourAt(stops, t), i / count, (i + 1) / count));
+}
+
 // Frames for a gradient that flows along the panels. It's laid end to end
-// with a mirrored copy (start → end → start), so the loop has no seam, and
-// each frame moves the panels one step along it. Frame 0 matches the still.
-export function driftFrames(stops, slices, frames = 24) {
+// with a mirrored copy (start → end → start), so the loop has no seam. Each
+// frame moves every panel one step along it and shows just that step's
+// colour, so every panel passes through the whole gradient while staying as
+// far along it from its neighbours as it sits from them on the ceiling.
+export function driftFrames(stops, slices, steps = DRIFT_STEPS) {
   const loop = (u) => {
     const v = ((u % 2) + 2) % 2;
     return colourAt(stops, v <= 1 ? v : 2 - v);
   };
-  return slices.map((s) => ({
-    id: s.id,
-    colours: Array.from({ length: frames }, (_, k) => {
-      const shift = (2 * k) / frames;
-      return average(loop, s.from + shift, s.to + shift);
-    }),
-  }));
+  const step = 1 / steps;
+  return slices.map((s) => {
+    const centre = (s.from + s.to) / 2;
+    return {
+      id: s.id,
+      colours: Array.from({ length: steps * 2 }, (_, k) => {
+        const at = centre + k * step;
+        return average(loop, at - step / 2, at + step / 2);
+      }),
+    };
+  });
 }
 
 // The body for PUT /effects. Colours fade in over `fade` seconds (still) or
