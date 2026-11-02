@@ -905,10 +905,6 @@ input[type="range"]:focus-visible::-moz-range-thumb {
     border-top: 1px solid var(--border);
 }
 
-.btn-print {
-    grid-column: 1 / -1;
-}
-
 /* ==========================================================================
    Print dialog
    ========================================================================== */
@@ -1119,6 +1115,65 @@ input[type="range"]:focus-visible::-moz-range-thumb {
 
 @keyframes spin {
     to { transform: rotate(360deg); }
+}
+
+/* ==========================================================================
+   Wallpapers dialog: print cards, but several can be ticked
+   ========================================================================== */
+
+/* Status and buttons stay in view while the list scrolls on small screens. */
+.wallpapers-foot {
+    position: sticky;
+    bottom: 0;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px 16px;
+    margin: 0 -20px -20px;
+    padding: 14px 20px 20px;
+    border-top: 1px solid var(--border);
+    background: var(--panel);
+}
+
+.wallpapers-foot .print-actions {
+    margin-left: auto;
+}
+
+@media (max-width: 560px) {
+    .wallpapers-foot {
+        margin: 0 -16px -16px;
+        padding: 12px 16px 16px;
+    }
+}
+
+.wallpaper-device::before {
+    content: "";
+    position: absolute;
+    top: 7px;
+    right: 7px;
+    width: 16px;
+    height: 16px;
+    box-sizing: border-box;
+    border: 1.5px solid var(--border-strong);
+    border-radius: 50%;
+}
+
+.wallpaper-device:has(input:checked)::before {
+    border-color: var(--accent);
+    background: var(--accent);
+}
+
+.wallpaper-device:has(input:checked)::after {
+    content: "";
+    position: absolute;
+    top: 10px;
+    right: 13px;
+    width: 4px;
+    height: 7px;
+    border: solid var(--panel);
+    border-width: 0 2px 2px 0;
+    transform: rotate(45deg);
 }
 
 /* ==========================================================================

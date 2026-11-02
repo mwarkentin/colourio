@@ -36,6 +36,7 @@
         detailsRaw: $('detailsRaw'),
         detailsCopyBtn: $('detailsCopyBtn'),
         printBtn: $('printBtn'),
+        wallpapersBtn: $('wallpapersBtn'),
         snapshotBtn: $('snapshotBtn'),
         cssBtn: $('cssBtn'),
         stage: $('stage'),
@@ -269,7 +270,7 @@
         els.readout.hidden = false;
         els.preview.hidden = false;
         els.previewPlaceholder.hidden = true;
-        [els.downloadBtn, els.shareBtn, els.snapshotBtn, els.cssBtn, els.printBtn].forEach(function (btn) { btn.disabled = false; });
+        [els.downloadBtn, els.shareBtn, els.snapshotBtn, els.cssBtn, els.wallpapersBtn, els.printBtn].forEach(function (btn) { btn.disabled = false; });
 
         layout();
         render();

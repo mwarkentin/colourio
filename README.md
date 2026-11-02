@@ -61,6 +61,17 @@ opening one. Both show the settings in plain language plus the raw data, which
 is also readable outside colourio, for example with
 `identify -format "%c" file.jpg` (ImageMagick) or `exiftool -Comment file.jpg`.
 
+## Wallpapers
+
+**Wallpapers** makes the current stripes in the shape of each kind of screen:
+the screen you're on, iPhone, Android phone, iPad (square, so it fits either
+way up), MacBook, 16:9 desktop and 21:9 ultrawide. Each is as big as the
+largest screen of its kind, so smaller ones scale it down instead of cropping
+off the ends of the gradient. On a computer they download as one ZIP (or a
+single PNG); on a phone only that phone's wallpaper is ticked, and it goes to
+the share sheet so it can be saved to Photos. The sizes live in `DEVICES` at
+the top of `wallpapers.js`.
+
 ## Telemetry
 
 `telemetry.js` sends errors, performance traces, session replays, logs and
@@ -89,7 +100,8 @@ so it's safe to call anywhere. What it records:
   `file_picker`, `drop`, `paste`, `share_link`), its size in megapixels, and
   how long loading takes.
 - **Features:** samples chosen, settings changed, crops, snapshots, palette and
-  CSS copies, PNG downloads by size, and shares by method (link copied or
+  CSS copies, PNG downloads by size, wallpapers by screen and how they were
+  saved (ZIP, PNG or share sheet), and shares by method (link copied or
   through the share sheet, session file shared or downloaded).
 - **Warnings** (Sentry logs): images that fail to load or aren't images,
   invalid share links, unrecognised session files, clipboard failures and share
