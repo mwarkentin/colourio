@@ -13,7 +13,8 @@ import { dirname, join } from 'node:path';
 import { parseArgs } from 'node:util';
 
 import {
-  buildEffect, driftFrames, getInfo, getLayout, pair, panelSlices, parseGradient, sendEffect, stillColours, toHex,
+  buildEffect, DRIFT_STEPS, driftFrames, getInfo, getLayout, gradientColours, pair, panelSlices, parseGradient, sendEffect,
+  stillColours, toHex,
 } from './lib.mjs';
 
 const CONFIG = process.env.COLOURIO_NANOLEAF_CONFIG || join(homedir(), '.config', 'colourio', 'nanoleaf.json');
@@ -65,7 +66,8 @@ function readClipboard() {
 }
 
 // A coloured block per panel, in terminals that support 24-bit colour.
-const swatch = (c) => `\x1b[48;2;${c.r};${c.g};${c.b}m      \x1b[0m ${toHex(c)}`;
+const block = (c, width) => `\x1b[48;2;${c.r};${c.g};${c.b}m${' '.repeat(width)}\x1b[0m`;
+const swatch = (c) => `${block(c, 6)} ${toHex(c)}`;
 
 function paired() {
   const config = readConfig();
@@ -119,7 +121,12 @@ async function main(argv) {
     const still = stillColours(stops, slices);
     const panels = values.drift ? driftFrames(stops, slices) : still;
     await sendEffect(host, token, buildEffect(panels, { drift: values.drift, cycle, name: values.save }));
-    still.forEach((p, i) => console.log(`  ${i + 1}. ${swatch(p.colour)}`));
+    if (values.drift) {
+      console.log(`Each panel flows through these ${DRIFT_STEPS} colours and back:`);
+      console.log(`  ${gradientColours(stops).map((c) => block(c, 2)).join('')}`);
+    } else {
+      still.forEach((p, i) => console.log(`  ${i + 1}. ${swatch(p.colour)}`));
+    }
     const how = values.drift ? `flowing, ${cycle}s a cycle` : 'still';
     console.log(values.save ? `Saved as “${values.save}” and showing (${how}).` : `Showing (${how}).`);
     return;
