@@ -140,6 +140,8 @@ What it sends, once per page load:
 - The page's path, such as `/colourio/`.
 - Where the visitor came from, as an origin only (`https://example.com`).
   Moves within `mwarkentin.github.io` count as no referrer.
+- Counterscale adds the browser and device from the user agent, and the
+  country Cloudflare works out from the IP address, which it doesn't keep.
 
 What it doesn't send: the query string or the `#fragment`, so nothing from a
 share link (sample, line, crop or sampled colours) leaves the browser; the
