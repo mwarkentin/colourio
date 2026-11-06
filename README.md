@@ -31,6 +31,15 @@ workflow by hand from the Actions tab.
 The print upload Worker in `worker/` deploys separately, through
 `.github/workflows/worker.yml`; see [worker/README.md](worker/README.md).
 
+### Link previews
+
+The Open Graph and Twitter card tags in `index.html` give links to colourio
+a title, description and `og-image.jpg` (1200×630) in Slack, iMessage,
+Bluesky, Mastodon, Threads, Reddit and Pinterest. The image is the Cosmic
+Cliffs sample beside the stripes from one of its rows. `og:url` and
+`og:image` must be absolute, so change both if the site moves to another
+domain.
+
 ## Sharing
 
 **Share** offers two ways to pass a session on. Neither uploads anything.
