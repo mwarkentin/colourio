@@ -127,6 +127,40 @@ moves, individual renders and slider steps aren't recorded.
 It reports to the `colourio` project in Sentry. To point it elsewhere, or turn
 it off, change or empty `SENTRY_DSN`. The DSN is safe to publish.
 
+## Analytics
+
+`analytics.js` counts page views with
+[Counterscale](https://counterscale.dev), the same self-hosted analytics as the
+tools and games sites, under the site ID `colourio` at
+`counterscale.mwarkentin.workers.dev`. It's separate from telemetry and only
+runs on `mwarkentin.github.io/colourio`, so local previews send nothing.
+
+What it sends, once per page load:
+
+- The page's path, such as `/colourio/`.
+- Where the visitor came from, as an origin only (`https://example.com`).
+  Moves within `mwarkentin.github.io` count as no referrer.
+- Counterscale adds the browser and device from the user agent, and the
+  country Cloudflare works out from the IP address, which it doesn't keep.
+
+What it doesn't send: the query string or the `#fragment`, so nothing from a
+share link (sample, line, crop or sampled colours) leaves the browser; the
+full referrer URL; `utm_` or `ref` parameters; or anything about images,
+settings or clicks. It sets no cookies.
+
+The tracker, `@counterscale/tracker`, is loaded from jsDelivr pinned to a
+version with an integrity hash; the script fetches it so the browser checks
+the hash, then imports it. Keep it on the version the Counterscale install
+runs. To update, change the version in `TRACKER.src` and the hash in
+`TRACKER.integrity` together, getting the hash with:
+
+```sh
+curl -s https://cdn.jsdelivr.net/npm/@counterscale/tracker@<version>/dist/module/index.js \
+  | openssl dgst -sha384 -binary | openssl base64 -A
+```
+
+and prefix it with `sha384-`.
+
 ## Samples
 
 **Samples** opens a gallery of images with striking palettes, filterable by
