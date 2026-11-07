@@ -46,7 +46,7 @@ addresses or file names.
 address. It counts separately at each Cloudflare location and errs towards
 allowing requests. If the binding is removed, the Worker runs without a limit.
 
-**Expiry.** An R2 lifecycle rule (setup step 2) deletes files a year after
+**Expiry.** An R2 lifecycle rule (`colourio.tf` in mwarkentin/infra) deletes files a year after
 upload, so the bucket doesn't grow forever. A Zazzle product made from an
 expired file stops showing the image, so don't make it much shorter until
 it's clear how long Zazzle needs the file.
@@ -66,63 +66,46 @@ constants exported for tests can't live there.
 
 ## Setup
 
-Use the same Cloudflare account as Counterscale and the games leaderboard.
-Run these from this `worker/` folder.
+The Cloudflare side is managed with OpenTofu in
+[mwarkentin/infra](https://github.com/mwarkentin/infra), in `colourio.tf`:
+the `colourio-prints` bucket, the lifecycle rule that deletes files a year
+after upload, and `colourio-prints-deploy`, an account-owned token that can
+only upload Workers. Changes there go through a pull request, whose plan is
+applied when it merges. This repo deploys the Worker's code.
 
-1. **Turn on R2** in the Cloudflare dashboard (**R2 Object Storage** in the
-   sidebar). Cloudflare asks for a payment method before turning it on, even
-   for the free tier.
-2. **Create the bucket** and the rule that deletes files after a year:
-
-   ```sh
-   npx wrangler@4.151.0 login
-   npx wrangler@4.151.0 r2 bucket create colourio-prints
-   npx wrangler@4.151.0 r2 bucket lifecycle add colourio-prints expire-prints --expire-days 365
-   ```
-
-3. **Deploy:**
-
-   ```sh
-   npx wrangler@4.151.0 deploy
-   ```
-
-   It prints the Worker's URL, such as
-   `https://colourio-prints.<your-subdomain>.workers.dev`. If the account
-   has no `workers.dev` subdomain yet, Wrangler asks you to pick one.
+1. **Merge the infra pull request** that adds `colourio.tf`. Its apply makes
+   the bucket, the rule and the token.
+2. **Give GitHub the credentials.** Read the token from infra's state with
+   `tofu output -raw colourio_deploy_token` (see infra's README, colourio),
+   then in this repo's Settings → Secrets and variables → Actions set:
+   - Secret `CLOUDFLARE_API_TOKEN`: that token.
+   - Variable `CLOUDFLARE_ACCOUNT_ID`: the account ID, from the dashboard.
+3. **Deploy.** The **Prints worker** workflow tests every change under
+   `worker/` and deploys changes merged to `master` with
+   `npx wrangler@4.151.0 deploy`; it's skipped while `CLOUDFLARE_ACCOUNT_ID`
+   is unset. After step 2, run it from the Actions tab (Run workflow on
+   `master`) for the first deploy. The Worker answers at
+   `https://colourio-prints.mwarkentin.workers.dev`.
 4. **Check it** with any small PNG:
 
    ```sh
-   curl -X POST https://colourio-prints.<your-subdomain>.workers.dev/v1/prints \
+   curl -X POST https://colourio-prints.mwarkentin.workers.dev/v1/prints \
      -H 'Origin: https://mwarkentin.github.io' -H 'Content-Type: image/png' \
      --data-binary @test.png
    ```
 
    It answers with the file's URL; open it to see the image.
 5. **Declare the domain on Zazzle:** add
-   `colourio-prints.<your-subdomain>.workers.dev` on the
-   [domains page](https://www.zazzle.com/my/ambassador/domains). Zazzle
-   refuses images from undeclared domains.
-6. **Point colourio at it:** in `print.js`, set `hosting.provider` to
-   `'worker'` and `hosting.worker.url` to the Worker's URL, and merge.
+   `colourio-prints.mwarkentin.workers.dev` on the
+   [domains page](https://www.zazzle.com/my/ambassador/domains), with the
+   same ownership option as `res.cloudinary.com`. Zazzle shows a placeholder
+   instead of images from undeclared domains.
 
-Optional: serve the Worker from your own domain (such as
-`prints.michaelwarkentin.com`) under the Worker's **Settings → Domains &
-Routes**. That needs the domain's DNS on Cloudflare, and the new domain
-declared on Zazzle; the `workers.dev` URL works without either.
+`print.js` already points `hosting.worker.url` at the Worker.
 
-### Deploying from GitHub
-
-The **Prints worker** workflow tests every change under `worker/` and, once
-set up, deploys changes merged to `master`. Until then the deploy job is
-skipped, so after setup step 3, later Worker changes need either another
-`wrangler deploy` or:
-
-1. **Create an API token** at https://dash.cloudflare.com/profile/api-tokens,
-   starting from the **Edit Cloudflare Workers** template.
-2. **Give GitHub the credentials.** In this repo's Settings → Secrets and
-   variables → Actions:
-   - Secret `CLOUDFLARE_API_TOKEN`: the token from step 1.
-   - Variable `CLOUDFLARE_ACCOUNT_ID`: your account ID, from the dashboard.
+A custom domain (such as `prints.michaelwarkentin.com`) needs the zone on
+Cloudflare, which it isn't yet (it's on DNSimple); infra's README tracks that.
+It would also need declaring on Zazzle.
 
 ## Local development
 
