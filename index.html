@@ -232,6 +232,10 @@
             </div>
         </section>
 
+        <footer class="site-foot">
+            <p>Found a bug or have an idea? <a href="https://github.com/mwarkentin/colourio/issues/new/choose" target="_blank" rel="noopener" data-feedback>Send feedback</a></p>
+        </footer>
+
         <div class="drop-overlay" aria-hidden="true">
             <div class="drop-overlay-inner">Drop to load image</div>
         </div>
@@ -351,6 +355,31 @@
                     <button type="button" class="btn" id="detailsCopyBtn">Copy</button>
                 </details>
             </div>
+        </dialog>
+
+        <!-- Opened by telemetry.js once Sentry has loaded; until then "Send feedback" goes to GitHub. -->
+        <dialog class="dialog feedback-dialog" id="feedbackDialog" aria-labelledby="feedbackTitle">
+            <form class="dialog-sheet">
+                <div class="dialog-head">
+                    <h2 id="feedbackTitle">Send feedback</h2>
+                    <button type="button" class="icon-btn" id="feedbackCloseBtn" aria-label="Close">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
+                    </button>
+                </div>
+                <p class="dialog-intro">Found a bug, or have an idea? A replay of the last minute comes with it, so I can see what happened. Your photos are never in it, and what you type here is hidden.</p>
+                <label class="feedback-field">
+                    <span>What happened, or what’s your idea?</span>
+                    <textarea name="message" required maxlength="4000" rows="5" class="sentry-mask"></textarea>
+                </label>
+                <label class="feedback-field">
+                    <span>Your email, if you’d like a reply (optional)</span>
+                    <input name="email" type="email" autocomplete="email" class="sentry-mask">
+                </label>
+                <div class="feedback-actions">
+                    <a href="https://github.com/mwarkentin/colourio/issues/new/choose" target="_blank" rel="noopener">Or open an issue on GitHub</a>
+                    <button type="submit" class="btn btn-primary">Send</button>
+                </div>
+            </form>
         </dialog>
 
         <div class="toast" id="toast" role="status" aria-live="polite"></div>

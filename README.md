@@ -127,6 +127,15 @@ moves, individual renders and slider steps aren't recorded.
 It reports to the `colourio` project in Sentry. To point it elsewhere, or turn
 it off, change or empty `SENTRY_DSN`. The DSN is safe to publish.
 
+### Feedback
+
+The footer's "Send feedback" link (`data-feedback`) goes to this repo's issue
+forms (`.github/ISSUE_TEMPLATE/`). Once Sentry has loaded, `telemetry.js`
+opens `#feedbackDialog` instead, which sends the message and an optional email
+to Sentry's User Feedback with the last minute of the replay
+(`Sentry.captureFeedback`, in every CDN bundle). The replay keeps the rules
+above, so photos are never in it, and the form's fields are masked.
+
 ## Analytics
 
 `analytics.js` counts page views with

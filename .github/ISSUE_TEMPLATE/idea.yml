@@ -1,0 +1,10 @@
+name: Idea
+description: A feature, a print product, or anything else you'd like colourio to do.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: idea
+    attributes:
+      label: What's your idea?
+    validations:
+      required: true
