@@ -1,0 +1,40 @@
+name: Site tests
+
+on:
+  push:
+    paths:
+      - '*.html'
+      - '*.js'
+      - '*.css'
+      - 'samples/**'
+      - 'test/**'
+      - '.github/workflows/site.yml'
+  pull_request:
+    paths:
+      - '*.html'
+      - '*.js'
+      - '*.css'
+      - 'samples/**'
+      - 'test/**'
+      - '.github/workflows/site.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      # The site has no dependencies; Playwright is only for the browser
+      # tests, which fail rather than skip in CI if it's missing.
+      - name: Install Playwright
+        run: |
+          npm install --no-save --no-package-lock playwright@1.63.0
+          npx playwright install --with-deps chromium
+      - name: Test the site
+        run: node --test "test/*.test.mjs"

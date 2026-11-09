@@ -44,8 +44,7 @@
 
     var screens = [];
     var files = {};         // screen id -> File, for the image currently open
-    var ready = null;       // { files, zip } once every ticked screen is rendered
-    var generation = 0;     // bumps when the selection changes mid-render
+    var made = null;        // { files, zip } while the flow is ready
 
     // The screen colourio is open on, in device pixels. Phones report their
     // portrait size in either orientation on some browsers, so it's kept
@@ -184,71 +183,105 @@
         var count = selected().length;
         var noun = count === 1 ? 'wallpaper' : 'wallpapers';
         els.downloadBtn.textContent = count > 1 ? 'Download ZIP' : 'Download PNG';
-        els.downloadBtn.disabled = !ready;
-        els.shareBtn.disabled = !ready;
+        els.downloadBtn.disabled = !made;
+        els.shareBtn.disabled = !made;
         els.shareBtn.textContent = 'Save or share ' + (count > 1 ? count + ' ' + noun : 'wallpaper');
     };
 
     // Renders every ticked screen ahead of time: Safari only opens the share
     // sheet straight from a tap, so the files have to be ready by then.
-    var prepare = function () {
-        var run = ++generation;
+    // Rendered files are kept while the dialog is open, so ticking another
+    // screen only renders that one.
+    var renderPicked = function () {
+        var guard = flow.guard();
         var picked = selected();
-        ready = null;
-        updateButtons();
-        if (!picked.length) {
-            setStatus('Pick at least one screen.');
-            return;
-        }
+        var cache = files;
         var timer = T.timer('wallpapers.render', { count: picked.length });
-        var queue = picked.filter(function (s) { return !files[s.id]; });
+        var queue = picked.filter(function (s) { return !cache[s.id]; });
         var failed = [];
 
         var next = function () {
-            if (run !== generation) { return; }
+            // The ticks changed or the dialog closed: a newer run takes over.
+            if (!guard.active()) { return; }
             var s = queue.shift();
             if (s) {
                 setStatus('Making the ' + s.name + ' wallpaper…', 'busy');
                 // Give the status a frame to paint before the blocking render.
                 requestAnimationFrame(function () {
                     setTimeout(function () {
-                        if (run !== generation) { return; }
+                        if (!guard.active()) { return; }
                         renderOne(s, function (file) {
-                            if (file) { files[s.id] = file; } else { failed.push(s); }
+                            if (file) { cache[s.id] = file; } else { failed.push(s); }
                             next();
                         });
                     }, 0);
                 });
                 return;
             }
-            finish();
-        };
 
-        var finish = function () {
             timer.end({ ok: !failed.length });
             if (failed.length) {
                 // Usually a canvas too large for the device's memory.
                 T.warn('Wallpaper could not be created', { screen: failed[0].id, width: failed[0].width, height: failed[0].height });
-                setStatus('Couldn’t make the ' + failed.map(function (s) { return s.name; }).join(' and ') +
-                    ' wallpaper on this device. Untick it to continue.', 'error');
+                guard.send('FAILED', { screens: failed });
                 return;
             }
-            var list = picked.map(function (s) { return files[s.id]; });
-            var total = list.reduce(function (sum, file) { return sum + file.size; }, 0);
-            var done = function (archive) {
-                if (run !== generation) { return; }
-                ready = { files: list, zip: archive };
-                setStatus('Ready · ' + list.length + ' ' + (list.length === 1 ? 'wallpaper' : 'wallpapers') + ', ' + formatBytes(total), 'done');
-                updateButtons();
-            };
-            if (list.length === 1) { return done(null); }
-            setStatus('Zipping…', 'busy');
+            var list = picked.map(function (s) { return cache[s.id]; });
+            if (list.length === 1) {
+                guard.send('READY', { files: list, zip: null });
+                return;
+            }
+            guard.send('ZIP');
+            var zipping = flow.guard();
             Promise.all(list.map(function (file) { return file.arrayBuffer(); })).then(function (buffers) {
-                done(zip(list.map(function (file, i) { return { name: file.name, bytes: new Uint8Array(buffers[i]) }; })));
+                if (!zipping.active()) { return; }
+                zipping.send('READY', {
+                    files: list,
+                    zip: zip(list.map(function (file, i) { return { name: file.name, bytes: new Uint8Array(buffers[i]) }; }))
+                });
             });
         };
 
         next();
+    };
+
+    // RENDER (re)starts rendering for the ticked screens; ticking or
+    // unticking one sends it again, which drops the run under way.
+    var flow = colourioMachine({
+        name: 'wallpapers',
+        initial: 'closed',
+        states: {
+            closed: { RENDER: 'rendering', NOTHING_PICKED: 'empty' },
+            rendering: { RENDER: 'rendering', NOTHING_PICKED: 'empty', ZIP: 'zipping', READY: 'ready', FAILED: 'failed', CLOSE: 'closed' },
+            zipping: { RENDER: 'rendering', NOTHING_PICKED: 'empty', READY: 'ready', CLOSE: 'closed' },
+            ready: { RENDER: 'rendering', NOTHING_PICKED: 'empty', CLOSE: 'closed' },
+            failed: { RENDER: 'rendering', NOTHING_PICKED: 'empty', CLOSE: 'closed' },
+            empty: { RENDER: 'rendering', NOTHING_PICKED: 'empty', CLOSE: 'closed' }
+        },
+        enter: function (status, data) {
+            made = status === 'ready' ? data : null;
+            if (status === 'closed') { files = {}; }
+            updateButtons();
+            if (status === 'zipping') {
+                setStatus('Zipping…', 'busy');
+            } else if (status === 'ready') {
+                var total = data.files.reduce(function (sum, file) { return sum + file.size; }, 0);
+                setStatus('Ready · ' + data.files.length + ' ' + (data.files.length === 1 ? 'wallpaper' : 'wallpapers') + ', ' + formatBytes(total), 'done');
+            } else if (status === 'failed') {
+                setStatus('Couldn’t make the ' + data.screens.map(function (s) { return s.name; }).join(' and ') +
+                    ' wallpaper on this device. Untick it to continue.', 'error');
+            } else if (status === 'empty') {
+                setStatus('Pick at least one screen.');
+            } else if (status === 'closed') {
+                setStatus('');
+            } else if (status === 'rendering') {
+                renderPicked();
+            }
+        }
+    });
+
+    var prepare = function () {
+        flow.send(selected().length ? 'RENDER' : 'NOTHING_PICKED');
     };
 
     // ======================================================================
@@ -318,9 +351,9 @@
     });
 
     els.downloadBtn.addEventListener('click', function () {
-        if (!ready) { return; }
-        var blob = ready.files.length === 1 ? ready.files[0] : ready.zip;
-        var name = ready.files.length === 1 ? ready.files[0].name : baseName() + '-wallpapers.zip';
+        if (!made) { return; }
+        var blob = made.files.length === 1 ? made.files[0] : made.zip;
+        var name = made.files.length === 1 ? made.files[0].name : baseName() + '-wallpapers.zip';
         if (!blob) { return; }
         var url = URL.createObjectURL(blob);
         var link = document.createElement('a');
@@ -330,13 +363,13 @@
         link.click();
         link.remove();
         setTimeout(function () { URL.revokeObjectURL(url); }, 10000);
-        sent(ready.files.length === 1 ? 'png' : 'zip', selectedIds());
+        sent(made.files.length === 1 ? 'png' : 'zip', selectedIds());
         els.dialog.close();
     });
 
     els.shareBtn.addEventListener('click', function () {
-        if (!ready) { return; }
-        var list = ready.files;
+        if (!made) { return; }
+        var list = made.files;
         var ids = selectedIds();
         els.dialog.close();
         navigator.share({ files: list }).then(function () {
@@ -355,10 +388,6 @@
     els.dialog.addEventListener('click', function (e) {
         if (e.target === els.dialog) { els.dialog.close(); }
     });
-    els.dialog.addEventListener('close', function () {
-        generation++;
-        files = {};
-        ready = null;
-        setStatus('');
-    });
+    // However it closes: a button, Escape or the backdrop.
+    els.dialog.addEventListener('close', function () { flow.send('CLOSE'); });
 })();

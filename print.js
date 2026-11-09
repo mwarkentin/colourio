@@ -78,7 +78,6 @@
 
     var selected = CONFIG.products[0];
     var T = window.colourio.telemetry;
-    var fileUrl = null;
 
     var HOSTING = CONFIG.hosting;
     var host = HOSTING.provider;
@@ -181,30 +180,154 @@
     };
 
     // ======================================================================
-    // Dialog
+    // Dialog (a state machine: machine.js; README → "State machines")
     // ======================================================================
+
+    // The print file on offer, from the moment it's rendered until the
+    // dialog closes or another product is picked:
+    // { blob, filename, product, dims, url }: dims is printSize()'s answer and
+    // url the download link's object URL.
+    var file = null;
+    var HAS_FILE = ['demoReady', 'uploading', 'uploadFailed', 'ready'];
 
     var setStatus = function (message, kind) {
         els.status.textContent = message;
         els.status.dataset.kind = kind || '';
     };
 
-    var resetResult = function () {
-        if (fileUrl) {
-            URL.revokeObjectURL(fileUrl);
-            fileUrl = null;
-        }
-        setStatus('');
-        els.demo.hidden = isLive(selected);
-        els.link.hidden = true;
-        els.mockup.hidden = true;
-        els.mockup.removeAttribute('src');
-        els.download.hidden = true;
-        els.download.classList.remove('btn-primary');
-        els.open.hidden = true;
-        els.goBtn.hidden = false;
-        els.goBtn.disabled = false;
+    var keepFile = function (made) {
+        file = made;
+        file.url = URL.createObjectURL(made.blob);
+        els.download.href = file.url;
+        els.download.download = file.filename;
     };
+
+    var dropFile = function () {
+        if (!file) { return; }
+        URL.revokeObjectURL(file.url);
+        els.download.removeAttribute('href');
+        file = null;
+    };
+
+    // Everything the dialog shows follows from its state. `data` is what the
+    // event that led here carried.
+    var show = function (status, data) {
+        var hasFile = HAS_FILE.indexOf(status) !== -1;
+        var canCreate = status === 'choosing' || status === 'rendering' || status === 'renderFailed';
+        var size = file ? file.dims : printSize(selected);
+
+        els.demo.hidden = isLive(selected);
+        els.download.hidden = !hasFile;
+        // Downloading is the main action in demo mode; after a failed
+        // upload, trying again is.
+        els.download.classList.toggle('btn-primary', status === 'demoReady');
+        els.goBtn.hidden = !(canCreate || status === 'uploadFailed');
+        els.goBtn.disabled = status === 'rendering';
+        els.goBtn.textContent = status === 'uploadFailed' ? 'Try upload again' : 'Create print file';
+        els.link.hidden = !(status === 'demoReady' || status === 'ready');
+        els.open.hidden = status !== 'ready';
+        if (status !== 'ready') {
+            els.mockup.hidden = true;
+            els.mockup.removeAttribute('src');
+        }
+
+        if (status === 'rendering') {
+            setStatus('Rendering ' + size.width + ' × ' + size.height + ' px print file…', 'busy');
+        } else if (status === 'renderFailed') {
+            setStatus('Couldn’t create the print file. Try a smaller product.', 'error');
+        } else if (status === 'demoReady') {
+            setStatus('Print file ready · ' + size.width + ' × ' + size.height + ' px (' + size.ppi +
+                ' ppi) · ' + formatBytes(file.blob.size), 'done');
+            els.linkText.textContent = zazzleUrl(file.product, exampleImageUrl(file.filename), imageCode(file.filename));
+        } else if (status === 'uploading') {
+            setStatus('Uploading print file…', 'busy');
+        } else if (status === 'uploadFailed') {
+            setStatus('Upload failed (' + data.message + '). You can still download the print file.', 'error');
+        } else if (status === 'ready') {
+            var name = file.product.name.toLowerCase();
+            els.mockup.src = realViewUrl(file.product, data.imageUrl);
+            els.mockup.alt = 'Preview of the ' + name + ' on Zazzle';
+            els.open.href = data.link;
+            els.linkText.textContent = data.link;
+            setStatus('Ready. Zazzle will show your stripes on the ' + name + '.', 'done');
+        } else {
+            setStatus('');
+        }
+    };
+
+    var renderFile = function () {
+        var guard = flow.guard();
+        var product = selected;
+        var size = printSize(product);
+        var mode = isLive(product) ? 'live' : 'demo';
+        var timer = T.timer('print.render', { product: product.id });
+
+        // Give the status a frame to paint before the (blocking) render.
+        requestAnimationFrame(function () {
+            setTimeout(function () {
+                // Picked another product or closed the dialog meanwhile.
+                if (!guard.active()) { return; }
+                var canvas = window.colourio.render(size.width, size.height);
+                canvas.toBlob(function (blob) {
+                    timer.end({ ok: !!blob });
+                    if (!blob) {
+                        // Usually a canvas too large for the device's memory.
+                        T.error(new Error('Print file could not be created'), { product: product.id, width: size.width, height: size.height });
+                        T.count('print.file_failed', { product: product.id });
+                        guard.send('RENDER_FAILED');
+                        return;
+                    }
+                    T.count('print.file_created', { product: product.id, mode: mode });
+                    T.distribution('print.file_bytes', blob.size, 'byte', { product: product.id });
+                    var info = window.colourio.describe();
+                    var filename = [info.name, info.direction, info.position, product.id].join('-') + '.png';
+                    guard.send(mode === 'live' ? 'UPLOAD' : 'DEMO', { blob: blob, filename: filename, product: product, dims: size });
+                }, 'image/png');
+            }, 0);
+        });
+    };
+
+    var uploadFile = function () {
+        var guard = flow.guard();
+        var product = file.product;
+        var filename = file.filename;
+        var timer = T.timer('print.upload', { product: product.id, upload_host: host });
+        upload(file.blob, filename).then(function (imageUrl) {
+            timer.end({ ok: true });
+            T.count('print.uploaded', { product: product.id, upload_host: host });
+            guard.send('UPLOADED', { imageUrl: imageUrl, link: zazzleUrl(product, imageUrl, imageCode(filename)) });
+        }, function (error) {
+            timer.end({ ok: false });
+            // The host's message isn't forwarded; the status says enough.
+            T.error(new Error('Print file upload failed'), { product: product.id, upload_host: host, status: error.status || 'network' });
+            T.count('print.upload_failed', { product: product.id, upload_host: host });
+            guard.send('UPLOAD_FAILED', { message: error.message });
+        });
+    };
+
+    // Picking another product (SELECT) or closing the dialog starts over,
+    // and drops any render or upload still under way.
+    var flow = colourioMachine({
+        name: 'print',
+        initial: 'closed',
+        states: {
+            closed: { OPEN: 'choosing' },
+            choosing: { CREATE: 'rendering', SELECT: 'choosing', CLOSE: 'closed' },
+            rendering: { DEMO: 'demoReady', UPLOAD: 'uploading', RENDER_FAILED: 'renderFailed', SELECT: 'choosing', CLOSE: 'closed' },
+            renderFailed: { CREATE: 'rendering', SELECT: 'choosing', CLOSE: 'closed' },
+            demoReady: { SELECT: 'choosing', CLOSE: 'closed' },
+            uploading: { UPLOADED: 'ready', UPLOAD_FAILED: 'uploadFailed', SELECT: 'choosing', CLOSE: 'closed' },
+            uploadFailed: { RETRY: 'uploading', SELECT: 'choosing', CLOSE: 'closed' },
+            ready: { SELECT: 'choosing', CLOSE: 'closed' }
+        },
+        enter: function (status, data, from, event) {
+            if (event === 'DEMO' || event === 'UPLOAD') { keepFile(data); }
+            if (HAS_FILE.indexOf(status) === -1) { dropFile(); }
+            show(status, data);
+            if (status === 'rendering') { renderFile(); }
+            if (status === 'uploading') { uploadFile(); }
+        }
+    });
 
     var buildProducts = function () {
         els.products.innerHTML = '';
@@ -219,7 +342,7 @@
             input.checked = product === selected;
             input.addEventListener('change', function () {
                 selected = product;
-                resetResult();
+                flow.send('SELECT');
             });
 
             // Preview at the product's shape, drawn at 2x for sharpness.
@@ -248,85 +371,16 @@
         });
     };
 
-    var finish = function (blob, filename, product) {
-        fileUrl = URL.createObjectURL(blob);
-        els.download.href = fileUrl;
-        els.download.download = filename;
-        els.download.hidden = false;
-        els.goBtn.hidden = true;
-        els.goBtn.disabled = false;
-
-        if (!isLive(product)) {
-            els.download.classList.add('btn-primary');
-            els.linkText.textContent = zazzleUrl(product, exampleImageUrl(filename), imageCode(filename));
-            els.link.hidden = false;
-            return;
-        }
-
-        setStatus('Uploading print file…', 'busy');
-        var timer = T.timer('print.upload', { product: product.id, upload_host: host });
-        upload(blob, filename).then(function (imageUrl) {
-            timer.end({ ok: true });
-            T.count('print.uploaded', { product: product.id, upload_host: host });
-            var link = zazzleUrl(product, imageUrl, imageCode(filename));
-            els.mockup.src = realViewUrl(product, imageUrl);
-            els.mockup.alt = 'Preview of the ' + product.name.toLowerCase() + ' on Zazzle';
-            els.open.href = link;
-            els.open.hidden = false;
-            els.linkText.textContent = link;
-            els.link.hidden = false;
-            setStatus('Ready. Zazzle will show your stripes on the ' + product.name.toLowerCase() + '.', 'done');
-        }, function (error) {
-            timer.end({ ok: false });
-            // The host's message isn't forwarded; the status says enough.
-            T.error(new Error('Print file upload failed'), { product: product.id, upload_host: host, status: error.status || 'network' });
-            T.count('print.upload_failed', { product: product.id, upload_host: host });
-            setStatus('Upload failed (' + error.message + '). You can still download the print file.', 'error');
-            els.download.classList.add('btn-primary');
-        });
-    };
-
-    var createPrintFile = function () {
-        var product = selected;
-        var size = printSize(product);
-        els.goBtn.disabled = true;
-        setStatus('Rendering ' + size.width + ' × ' + size.height + ' px print file…', 'busy');
-
-        var mode = isLive(product) ? 'live' : 'demo';
-        var timer = T.timer('print.render', { product: product.id });
-
-        // Give the status a frame to paint before the (blocking) render.
-        requestAnimationFrame(function () {
-            setTimeout(function () {
-                var canvas = window.colourio.render(size.width, size.height);
-                canvas.toBlob(function (blob) {
-                    timer.end({ ok: !!blob });
-                    if (!blob) {
-                        // Usually a canvas too large for the device's memory.
-                        T.error(new Error('Print file could not be created'), { product: product.id, width: size.width, height: size.height });
-                        T.count('print.file_failed', { product: product.id });
-                        setStatus('Couldn’t create the print file. Try a smaller product.', 'error');
-                        els.goBtn.disabled = false;
-                        return;
-                    }
-                    T.count('print.file_created', { product: product.id, mode: mode });
-                    T.distribution('print.file_bytes', blob.size, 'byte', { product: product.id });
-                    var info = window.colourio.describe();
-                    var filename = [info.name, info.direction, info.position, product.id].join('-') + '.png';
-                    setStatus('Print file ready · ' + size.width + ' × ' + size.height + ' px (' + size.ppi +
-                        ' ppi) · ' + formatBytes(blob.size), 'done');
-                    finish(blob, filename, product);
-                }, 'image/png');
-            }, 0);
-        });
-    };
-
     els.printBtn.addEventListener('click', function () {
-        if (!window.colourio.render(1, 1)) { return; }
+        if (!window.colourio.render(1, 1) || !flow.is('closed')) { return; }
         buildProducts();
-        resetResult();
+        flow.send('OPEN');
         els.dialog.showModal();
         T.count('print.dialog_opened', { mode: CONFIG.products.some(isLive) ? 'live' : 'demo' });
+    });
+
+    els.goBtn.addEventListener('click', function () {
+        flow.send(flow.is('uploadFailed') ? 'RETRY' : 'CREATE');
     });
 
     els.open.addEventListener('click', function () {
@@ -336,7 +390,6 @@
         T.count('print.file_downloaded', { product: selected.id, mode: isLive(selected) ? 'live' : 'demo' });
     });
 
-    els.goBtn.addEventListener('click', createPrintFile);
     els.closeBtn.addEventListener('click', function () { els.dialog.close(); });
 
     // Clicking the backdrop closes the dialog.
@@ -344,10 +397,13 @@
         if (e.target === els.dialog) { els.dialog.close(); }
     });
 
-    els.dialog.addEventListener('close', resetResult);
+    // However it closes: a button, Escape or the backdrop.
+    els.dialog.addEventListener('close', function () { flow.send('CLOSE'); });
 
     // Only show the mockup if Zazzle could render it.
-    els.mockup.addEventListener('load', function () { els.mockup.hidden = false; });
+    els.mockup.addEventListener('load', function () {
+        if (flow.is('ready')) { els.mockup.hidden = false; }
+    });
     els.mockup.addEventListener('error', function () {
         els.mockup.hidden = true;
         if (els.mockup.getAttribute('src')) { T.warn('Print mockup failed', { product: selected.id }); }

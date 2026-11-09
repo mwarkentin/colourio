@@ -21,6 +21,63 @@ python3 -m http.server
 Then open <http://localhost:8000>. Opening `index.html` directly works too,
 but you'll need to load your own image (drop, paste, or browse).
 
+### Tests
+
+```sh
+node --test "test/*.test.mjs"
+```
+
+`test/machine.test.mjs` covers the state machine helper. The browser tests in
+`test/app.browser.test.mjs` drive the real page in headless Chromium; they
+need Playwright (`npm install --no-save playwright`, then
+`npx playwright install chromium`) and are skipped without it, except in CI.
+`.github/workflows/site.yml` runs both on every change to the site.
+
+## State machines
+
+The flows that take several steps or wait on async work are small state
+machines built with `machine.js`: a table of states and the events each one
+accepts, plus an `enter` function that sets up the page for the new state.
+Each machine's state is on `<html>` as a `data-*` attribute, so you can watch
+it in devtools, style with it, and wait on it in tests
+(`html[data-print="uploading"]`). `window.colourioMachines` lists them, each
+with its last 20 transitions in `history`.
+
+| Machine (`data-*`) | File | States |
+| --- | --- | --- |
+| `workspace` | `app.js` | `empty` → `sampling` ⇄ `cropping` |
+| `image` | `app.js` | `idle` ⇄ `loading` |
+| `share` | `app.js` | `closed` → `preparing` → `ready` |
+| `print` | `print.js` | `closed` → `choosing` → `rendering` → `demoReady`, or `uploading` → `ready` / `uploadFailed`; `renderFailed` |
+| `wallpapers` | `wallpapers.js` | `closed` → `rendering` → `zipping` → `ready`; `failed`, `empty` (nothing ticked) |
+
+The tables in the code are the full story; the rules they follow:
+
+- **Only the newest request counts.** Async work takes a `guard()` when it
+  starts and reports through it, so a result that arrives after the user has
+  moved on is dropped: an image that finishes loading after another was
+  chosen, a print upload for a product no longer picked, a session file or
+  wallpaper made for a dialog that has since closed. Picking a snapshot or
+  applying a crop also cancels an image still loading.
+- **Closing a dialog** in any way (button, Escape, backdrop) sends `CLOSE`
+  from its `close` event, and starts it over next time.
+- **An event the current state doesn't allow is a bug.** It's ignored,
+  logged to the console as `[colourio] <machine>: <event> ignored in state
+  <state>` and sent to telemetry; the browser tests fail on it. A table that
+  names a state that doesn't exist throws when the page loads.
+
+Some state is simple enough to stay as it is:
+
+- **The sampled line** is following the pointer or locked (`state.locked`,
+  shown by the lock button's `aria-pressed`). A drag (`drag` in `app.js`)
+  remembers whether it started locked, so a plain click toggles the lock and
+  a drag or touch always locks.
+- **A crop drag** moves, resizes or draws the box (`cropper.drag.mode`).
+- **The drop overlay** shows while files are dragged over the page
+  (`dragDepth` counts nested `dragenter`s).
+- **Telemetry's SDK** is `off`, `loading`, `ready` or `failed`
+  (`colourioTelemetry.status`); calls made while it's loading are queued.
+
 ## Deploying
 
 Every push to `master` deploys the site to GitHub Pages via
@@ -232,7 +289,8 @@ Zazzle's [Create-a-Product API guide](https://www.zazzle.com/api) and fill in
 The link follows the guide's 1-to-1 template format:
 `https://www.zazzle.com/api/create/at-{memberId}?ax=Linkover&pd={productId}&ed=true&ic={image code}&t_image1_iid={encoded image URL}`.
 `rf` and `tc` are added only if `ambassadorId` or `trackingCode` is set. Once live, the dialog also
-shows Zazzle's RealView mockup of the product. Products without a `productId`
+shows Zazzle's RealView mockup of the product. If an upload fails, the print
+file can still be downloaded and the dialog offers to try the upload again. Products without a `productId`
 stay in demo mode, so you can go live one product at a time.
 
 ### Commission
