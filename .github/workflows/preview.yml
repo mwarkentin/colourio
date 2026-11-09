@@ -1,0 +1,144 @@
+name: Preview
+
+# Every pull request gets a copy of the site, built from its branch merged
+# with master, at https://pr-<number>-colourio-preview.mwarkentin.workers.dev:
+# a Worker Preview of the assets-only colourio-preview Worker
+# (preview/wrangler.toml), like the games site's previews. One comment on the
+# pull request links to it and is kept up to date; the Preview is deleted when
+# the pull request closes. See "Previews" in README.md.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, closed]
+
+permissions:
+  contents: read
+
+env:
+  CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+  CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+  WRANGLER_SEND_METRICS: 'false'
+  PREVIEW: pr-${{ github.event.pull_request.number }}
+  # The account's workers.dev subdomain, which every Preview URL ends with.
+  # The preview's address goes into its page before it's uploaded, so it's
+  # worked out here rather than read back from wrangler.
+  WORKERS_DEV: mwarkentin.workers.dev
+
+jobs:
+  preview:
+    # Skipped until the Cloudflare token is set up (see "Previews" in
+    # README.md), and for pull requests from forks, which get no secrets.
+    if: >-
+      github.event.action != 'closed' &&
+      vars.CLOUDFLARE_ACCOUNT_ID != '' &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write # the comment with the preview's link
+    # A newer push to the same pull request takes over from one still going.
+    concurrency:
+      group: preview-${{ github.event.pull_request.number }}
+      cancel-in-progress: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # Everything at the top level the page can load, plus the samples. By
+      # pattern rather than pages.yml's list, so a new site file shows up
+      # here without anyone remembering to add it.
+      - name: Collect site files
+        run: |
+          mkdir _site
+          cp *.html *.js *.css *.jpg *.jpeg _site/
+          cp -r samples _site/
+
+      - name: Mark it as this pull request's preview
+        env:
+          PR: ${{ github.event.pull_request.number }}
+          SHA: ${{ github.event.pull_request.head.sha }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+        run: python3 preview/mark.py _site --url "https://$PREVIEW-colourio-preview.$WORKERS_DEV" --pr "$PR" --sha "$SHA" --pr-url "$PR_URL"
+
+      # Cleanup shares this job's group, so a pull request closing cancels
+      # this job while it runs. One that starts after it closed would make
+      # the Preview again after cleanup deleted it, so it deletes it instead.
+      - name: Check the pull request is still open
+        id: open
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          state="$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR" --jq .state)"
+          echo "open=$([ "$state" = open ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+
+      - name: Delete the Preview, since the pull request has closed
+        if: steps.open.outputs.open != 'true'
+        run: |
+          npx --yes wrangler@4.151.0 preview delete --worker-name colourio-preview --name "$PREVIEW" --skip-confirmation \
+            || echo "::notice::No Preview $PREVIEW to delete, or it couldn't be deleted. Check colourio-preview's Previews in the Cloudflare dashboard."
+
+      - name: Create or update the Preview
+        id: preview
+        if: steps.open.outputs.open == 'true'
+        working-directory: preview
+        run: |
+          set -o pipefail
+          output="$(npx --yes wrangler@4.151.0 preview --name "$PREVIEW" \
+            --message "${{ github.event.pull_request.head.sha }}" --json)"
+          printf '%s\n' "$output"
+          # With assets, wrangler logs the upload on stdout before the JSON.
+          url="$(printf '%s\n' "$output" | sed -n '/^{$/,$p' | jq -er '.preview.urls[0]')"
+          url="${url%/}"
+          expected="https://$PREVIEW-colourio-preview.$WORKERS_DEV"
+          if [ "$url" != "$expected" ]; then
+            echo "::error::The Preview is at $url, not $expected, which its page links to. Check WORKERS_DEV in preview.yml."
+            exit 1
+          fi
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+
+      # One comment per pull request, kept up to date rather than added to on
+      # every push.
+      - name: Comment with the preview's link
+        if: steps.open.outputs.open == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SITE: ${{ steps.preview.outputs.url }}
+          PR: ${{ github.event.pull_request.number }}
+          SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          marker='<!-- preview -->'
+          body="$marker
+          **Preview:** $SITE (updated for ${SHA:0:7})
+
+          Built from this branch merged with master. The preview is its own origin, so its snapshots and settings are kept apart from the live site's, and telemetry and analytics stay off. Prints stay in demo mode. It's deleted when this pull request closes."
+          id="$(gh api "repos/$GITHUB_REPOSITORY/issues/$PR/comments" --paginate \
+            --jq "[.[] | select(.user.login == \"github-actions[bot]\" and (.body | startswith(\"$marker\")))][0].id // empty" | head -n 1)"
+          if [ -n "$id" ]; then
+            gh api -X PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$id" -f body="$body" > /dev/null
+          else
+            gh api "repos/$GITHUB_REPOSITORY/issues/$PR/comments" -f body="$body" > /dev/null
+          fi
+
+  cleanup:
+    if: >-
+      github.event.action == 'closed' &&
+      vars.CLOUDFLARE_ACCOUNT_ID != '' &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    # The preview job's group, so closing the pull request cancels a preview
+    # job still running, which could otherwise make the Preview again after
+    # this deletes it.
+    concurrency:
+      group: preview-${{ github.event.pull_request.number }}
+      cancel-in-progress: true
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Delete the Preview
+        run: |
+          npx --yes wrangler@4.151.0 preview delete --worker-name colourio-preview --name "$PREVIEW" --skip-confirmation \
+            || echo "::notice::No Preview $PREVIEW to delete, or it couldn't be deleted. Check colourio-preview's Previews in the Cloudflare dashboard."

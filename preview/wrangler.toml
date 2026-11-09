@@ -1,0 +1,21 @@
+# Pull request previews: each pull request's own copy of the site, served as
+# static assets by a Worker Preview of this Worker at
+# https://pr-<number>-colourio-preview.mwarkentin.workers.dev. The Preview
+# workflow (.github/workflows/preview.yml) collects the site into _site/,
+# marks it as a preview, then runs `wrangler preview` here. See "Previews" in
+# README.md.
+#
+# This Worker is never deployed to production: the live site is GitHub
+# Pages. It has no code, only assets, so it needs no bindings or secrets, and
+# nothing in mwarkentin/infra: `wrangler preview` makes it on first use, like
+# games-preview in mwarkentin/games.
+name = "colourio-preview"
+compatibility_date = "2026-10-01"
+
+[assets]
+directory = "../_site"
+html_handling = "auto-trailing-slash"
+
+# Previews take nothing from the top level but the assets and compatibility
+# date, and there's nothing else to set.
+[previews]

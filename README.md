@@ -31,6 +31,34 @@ workflow by hand from the Actions tab.
 The print upload Worker in `worker/` deploys separately, through
 `.github/workflows/worker.yml`; see [worker/README.md](worker/README.md).
 
+### Previews
+
+Every pull request gets its own copy of the site at
+`https://pr-<number>-colourio-preview.mwarkentin.workers.dev`, built from
+its branch merged with `master`, so it can be tried (on a phone too) before
+merging. The **Preview** workflow (`.github/workflows/preview.yml`) makes it
+on each push, comments on the pull request with its link (one comment, kept
+up to date), and deletes it when the pull request closes.
+
+- **Hosting:** a [Worker Preview](https://developers.cloudflare.com/workers/previews/)
+  of `colourio-preview` (`preview/wrangler.toml`), a Worker with nothing but
+  static assets, the same way the games site does its previews. It's never
+  deployed to production, and `wrangler preview` makes it on first use, so
+  nothing about it lives in mwarkentin/infra.
+- **What's in it:** every top-level `.html`, `.js`, `.css`, `.jpg` and
+  `.jpeg` file plus `samples/`, matched by pattern rather than by
+  `pages.yml`'s list, so new files appear without being added anywhere.
+  `preview/mark.py` then points the link-preview tags at the preview, starts
+  the title with "PR <number> · ", marks the page `noindex`, and adds a strip
+  across the top linking to the pull request.
+- **Apart from the live site:** each preview is its own origin, so its
+  storage is its own. Telemetry and analytics check the hostname, so they
+  stay off. Prints stay in demo mode.
+- **Credentials:** the same `CLOUDFLARE_API_TOKEN` secret and
+  `CLOUDFLARE_ACCOUNT_ID` variable as the prints Worker's deploy: the
+  `colourio-prints-deploy` token from `colourio.tf` in mwarkentin/infra, which
+  can upload Workers. Pull requests from forks get no secrets and no preview.
+
 ### Link previews
 
 The Open Graph and Twitter card tags in `index.html` give links to colourio
