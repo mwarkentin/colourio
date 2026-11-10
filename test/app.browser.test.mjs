@@ -74,6 +74,10 @@ describe('colourio in a browser', { skip: !playwright && !process.env.CI && 'Pla
       await context.close();
       assert.deepEqual(errors, [], 'no page errors or ignored state machine events');
     });
+    // Nothing leaves the machine: prints are live, so an unfaked upload would
+    // reach the real prints Worker. Tests fake the hosts they need with
+    // page.route, which takes precedence over this.
+    await context.route((url) => !url.href.startsWith(base), (route) => route.abort());
     if (setup) await setup(page);
     await page.goto(base);
     await page.waitForSelector('html[data-workspace="sampling"][data-image="idle"]');
@@ -198,8 +202,21 @@ describe('colourio in a browser', { skip: !playwright && !process.env.CI && 'Pla
     await page.waitForSelector('html[data-wallpapers="ready"]', { timeout: 30000 });
   });
 
+  // print.js served with its settings changed, so the tests don't depend on
+  // which products are live. Each change must find what it replaces.
+  const configure = (changes) => (page) => page.route('**/print.js', async (route) => {
+    let source = await readFile(join(ROOT, 'print.js'), 'utf8');
+    for (const [pattern, replacement] of changes) {
+      const changed = source.replace(pattern, replacement);
+      assert.notEqual(changed, source, `print.js no longer has ${pattern}`);
+      source = changed;
+    }
+    await route.fulfill({ contentType: 'text/javascript', body: source });
+  });
+
+  // Demo mode: no product has a Zazzle template, so nothing is uploaded.
   test('print dialog in demo mode makes a file and an example link', async (t) => {
-    const page = await open(t);
+    const page = await open(t, configure([[/productId: '\d+'/g, "productId: ''"]]));
     await page.click('#printBtn');
     await page.waitForSelector('html[data-print="choosing"]');
     assert.equal(await page.isVisible('#printDemo'), true);
@@ -207,23 +224,19 @@ describe('colourio in a browser', { skip: !playwright && !process.env.CI && 'Pla
     await page.waitForSelector('html[data-print="demoReady"]', { timeout: 30000 });
     assert.equal(await page.isVisible('#printDownload'), true);
     assert.equal(await page.isVisible('#printGoBtn'), false);
-    assert.match(await page.textContent('#printLinkText'), /^https:\/\/www\.zazzle\.com\/api\/create\/at-YOUR_MEMBER_ID\?/);
+    assert.match(await page.textContent('#printLinkText'), /^https:\/\/www\.zazzle\.com\/api\/create\/at-[^?]+\?.*pd=YOUR_PRODUCT_ID/);
     await page.keyboard.press('Escape');
     await page.waitForSelector('html[data-print="closed"]');
   });
 
-  // Live mode, with print.js configured on the fly and the upload host faked.
+  // Live mode: every product has a template, and the upload host is faked
+  // (whatever print.js points at, uploads go to prints.test).
   const live = (upload) => async (page) => {
-    await page.route('**/print.js', async (route) => {
-      const source = await readFile(join(ROOT, 'print.js'), 'utf8');
-      await route.fulfill({
-        contentType: 'text/javascript',
-        body: source
-          .replace("memberId: ''", "memberId: '238000000000000000'")
-          .replace("url: ''", "url: 'https://prints.test'")
-          .replaceAll("productId: ''", "productId: '256000000000000000'"),
-      });
-    });
+    await configure([
+      [/memberId: '[^']*'/, "memberId: '238000000000000000'"],
+      [/(worker: \{\s*url: )'[^']*'/, "$1'https://prints.test'"],
+      [/productId: '[^']*'/g, "productId: '256000000000000000'"],
+    ])(page);
     await page.route('https://prints.test/**', upload);
     await page.route('https://rlv.zazzle.com/**', (route) => route.abort());
   };
