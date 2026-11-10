@@ -132,7 +132,7 @@ it off, change or empty `SENTRY_DSN`. The DSN is safe to publish.
 `analytics.js` counts page views with
 [Counterscale](https://counterscale.dev), the same self-hosted analytics as the
 tools and games sites, under the site ID `colourio` at
-`counterscale.mwarkentin.workers.dev`. It's separate from telemetry and only
+`stats.michaelwarkentin.com`. It's separate from telemetry and only
 runs on `mwarkentin.github.io/colourio`, so local previews send nothing.
 
 What it sends, once per page load:
