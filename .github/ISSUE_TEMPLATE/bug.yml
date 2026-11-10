@@ -1,0 +1,25 @@
+name: Bug
+description: Something in colourio doesn't work as it should.
+labels: [bug]
+# The "Send feedback" dialog fills in these fields by their ids (feedback.js).
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What you did, what you expected, and what happened instead. A screenshot helps; please don't attach photos you'd rather keep private.
+    validations:
+      required: true
+  - type: input
+    id: device
+    attributes:
+      label: Device and browser
+      placeholder: iPhone · iOS 18.5 · Safari 18.5
+    validations:
+      required: true
+  - type: textarea
+    id: details
+    attributes:
+      label: Details
+      description: Filled in by colourio's "Send feedback" dialog, without your photo. Edit or delete anything you'd rather not share.
+      render: text
