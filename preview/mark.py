@@ -6,14 +6,15 @@
 
 In index.html it:
 - swaps the live site's address (read from its og:url tag, so it follows the
-  site if it moves) in the link-preview tags for the preview's,
+  site if it moves) for the preview's in the og:url and og:image tags, so
+  links to the preview unfurl as the preview. The canonical link keeps the
+  live site's address: telemetry.js and analytics.js only run where that
+  link names the current origin, so a preview never reports.
 - starts the <title> with "PR <number> · ",
 - asks search engines not to index it, and
 - adds a strip across the top naming the pull request and commit, linked to
   the pull request.
 
-Telemetry and analytics already stay off, since they only run on the live
-site's hostname.
 """
 
 import argparse
@@ -23,6 +24,7 @@ import re
 import sys
 
 OG_URL = re.compile(r'<meta property="og:url" content="([^"]+)">')
+OG_TAG = re.compile(r'(<meta property="og:(?:url|image)" content=")([^"]*)(">)')
 
 BANNER = (
     '<a href="{pr_url}" style="display:block;padding:6px 16px;background:#ffe066;color:#1a1a1a;'
@@ -43,7 +45,8 @@ def mark(page: str, url: str, pr: str, sha: str, pr_url: str) -> str:
     live = OG_URL.search(page)
     if not live:
         sys.exit("mark.py: index.html has no og:url tag to take the live site's address from")
-    page = page.replace(live.group(1), url.rstrip("/") + "/")
+    live_base, preview_base = live.group(1), url.rstrip("/") + "/"
+    page = OG_TAG.sub(lambda m: m.group(1) + m.group(2).replace(live_base, preview_base) + m.group(3), page)
     page = replace_once("<title>", f"<title>PR {html.escape(pr)} · ", page)
     page = replace_once("</head>", '    <meta name="robots" content="noindex">\n    </head>', page)
     banner = BANNER.format(pr_url=html.escape(pr_url, quote=True), pr=html.escape(pr), sha=html.escape(sha[:7]))
