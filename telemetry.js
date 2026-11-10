@@ -56,18 +56,21 @@
     return item;
   };
 
-  // Calls made before the SDK has loaded wait here, then run in order. If it
-  // never loads (an ad blocker, say), they're dropped.
-  let ready = false;
-  let failed = false;
+  // The SDK is 'off' (not the live site), 'loading', 'ready' or 'failed'
+  // (an ad blocker, say). Calls made while it's loading wait here, then run
+  // in order once it's ready; if it fails, they're dropped.
+  let sdk = enabled ? 'loading' : 'off';
   const pending = [];
   const run = (fn) => {
-    if (!enabled || failed) return;
-    if (ready) fn();
-    else if (pending.length < 200) pending.push(fn);
+    if (sdk === 'ready') fn();
+    else if (sdk === 'loading' && pending.length < 200) pending.push(fn);
   };
 
   window.colourioTelemetry = {
+    // Where the SDK is up to, for debugging: off, loading, ready or failed.
+    get status() {
+      return sdk;
+    },
     // A metric counter, e.g. count('print.uploaded', { product: 'canvas' }).
     count(name, attributes) {
       run(() => Sentry.metrics.count(name, 1, { attributes: clean(attributes) }));
@@ -144,11 +147,11 @@
       beforeSendMetric: scrubAttributes,
     });
     early.forEach((error) => Sentry.captureException(error, { mechanism: { handled: false } }));
-    ready = true;
+    sdk = 'ready';
     pending.splice(0).forEach((fn) => fn());
   };
   script.onerror = () => {
-    failed = true;
+    sdk = 'failed';
     pending.length = 0;
   };
   document.head.append(script);

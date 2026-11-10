@@ -114,6 +114,59 @@
     };
 
     // ======================================================================
+    // State machines (machine.js; README → "State machines")
+    // ======================================================================
+
+    var exportButtons = [els.downloadBtn, els.shareBtn, els.snapshotBtn, els.cssBtn, els.wallpapersBtn, els.printBtn];
+
+    // What the source panel shows: nothing yet, an image to sample a line
+    // from, or the crop editor. `cropper` holds the crop editor's box while
+    // cropping; `state` holds the image while sampling or cropping.
+    var workspace = colourioMachine({
+        name: 'workspace',
+        initial: 'empty',
+        states: {
+            empty: { IMAGE: 'sampling', UNREADABLE: 'empty' },
+            sampling: { IMAGE: 'sampling', CROP: 'cropping', UNREADABLE: 'empty' },
+            cropping: { IMAGE: 'sampling', CLOSE_CROP: 'sampling', UNREADABLE: 'empty' }
+        },
+        enter: function (mode, data) {
+            var hasImage = mode !== 'empty';
+            var cropping = mode === 'cropping';
+            if (data && data.message) { els.emptySub.textContent = data.message; }
+            els.empty.hidden = hasImage;
+            els.stageInner.hidden = !hasImage || cropping;
+            els.readout.hidden = !hasImage || cropping;
+            els.cropStage.hidden = !cropping;
+            els.cropToolbar.hidden = !cropping;
+            els.hint.hidden = cropping;
+            if (!cropping) { els.cropStage.classList.remove('is-dragging'); }
+            els.sourceHeading.textContent = cropping ? 'Crop' : 'Source';
+            els.preview.hidden = !hasImage;
+            els.previewPlaceholder.hidden = hasImage;
+            els.palette.hidden = !hasImage;
+            if (!hasImage) { els.dims.textContent = ''; }
+            exportButtons.forEach(function (btn) { btn.disabled = !hasImage; });
+        }
+    });
+
+    // Fetching and decoding an image. Only the newest request counts: a load
+    // that finishes after another image was asked for, or after a snapshot
+    // or crop changed the image, is dropped (loadImage's guard). The current
+    // image stays on screen, dimmed, until the new one is ready.
+    var imageLoad = colourioMachine({
+        name: 'image',
+        initial: 'idle',
+        states: {
+            idle: { LOAD: 'loading' },
+            loading: { LOAD: 'loading', LOADED: 'idle', FAILED: 'idle', CANCEL: 'idle' }
+        },
+        enter: function (status) {
+            els.stage.setAttribute('aria-busy', String(status === 'loading'));
+        }
+    });
+
+    // ======================================================================
     // Helpers
     // ======================================================================
 
@@ -177,10 +230,19 @@
 
     // `source` says where the image came from (default, gallery, file_picker,
     // drop, paste or share_link), for telemetry.
+    // `onDone(ok)` always runs, so callers can free object URLs; `ok` is
+    // false if the image failed or a newer one was asked for meanwhile.
     var loadImage = function (src, name, onDone, credit, source) {
         var img = new Image();
         var timer = T.timer('image.load', { source: source });
+        imageLoad.send('LOAD');
+        var guard = imageLoad.guard();
         img.onload = function () {
+            if (!guard.send('LOADED')) {
+                timer.end({ ok: false, superseded: true });
+                if (onDone) { onDone(false); }
+                return;
+            }
             setImage(img, name, null, credit);
             var ok = !!state.pixels && state.img === img;
             timer.end({ ok: ok });
@@ -191,9 +253,12 @@
             if (onDone) { onDone(ok); }
         };
         img.onerror = function () {
-            toast("Couldn't read that image");
-            timer.end({ ok: false });
-            T.warn('Image failed to load', { source: source });
+            var current = guard.send('FAILED');
+            timer.end({ ok: false, superseded: !current });
+            if (current) {
+                toast("Couldn't read that image");
+                T.warn('Image failed to load', { source: source });
+            }
             if (onDone) { onDone(false); }
         };
         img.src = src;
@@ -221,8 +286,14 @@
         });
     };
 
+    // The image on screen is now newer than any still loading.
+    var cancelLoad = function () {
+        if (imageLoad.is('loading')) { imageLoad.send('CANCEL'); }
+    };
+
     var setImage = function (img, name, crop, credit) {
-        if (cropper) { closeCrop(); }
+        cancelLoad();
+        cropper = null;
         crop = crop || null;
         var cropX = crop ? crop.x : 0;
         var cropY = crop ? crop.y : 0;
@@ -245,7 +316,8 @@
         } catch (e) {
             // Browsers block reading pixels from images loaded over file://.
             T.warn('Image pixels unreadable');
-            showEmpty('or paste one from your clipboard. (The bundled sample needs the page to be served over http.)');
+            state.pixels = null;
+            workspace.send('UNREADABLE', { message: 'or paste one from your clipboard. (The bundled sample needs the page to be served over http.)' });
             return;
         }
 
@@ -266,13 +338,7 @@
         state.y = Math.floor(height / 2);
         state.hover = null;
         setLocked(false);
-
-        els.empty.hidden = true;
-        els.stageInner.hidden = false;
-        els.readout.hidden = false;
-        els.preview.hidden = false;
-        els.previewPlaceholder.hidden = true;
-        [els.downloadBtn, els.shareBtn, els.snapshotBtn, els.cssBtn, els.wallpapersBtn, els.printBtn].forEach(function (btn) { btn.disabled = false; });
+        workspace.send('IMAGE');
 
         layout();
         render();
@@ -290,13 +356,6 @@
             els.creditLink.href = credit.url;
             els.creditLink.textContent = credit.source;
         }
-    };
-
-    var showEmpty = function (message) {
-        if (message) { els.emptySub.textContent = message; }
-        els.empty.hidden = false;
-        els.stageInner.hidden = true;
-        els.readout.hidden = true;
     };
 
     // ======================================================================
@@ -565,7 +624,7 @@
     var layout = function () {
         if (!state.pixels) { return; }
         var viewport = window.innerHeight;
-        if (cropper) {
+        if (workspace.is('cropping')) {
             fit(els.cropCanvas, cropper.width, cropper.height,
                 innerWidth(els.stage), clamp(viewport - 240, 240, 900));
         } else {
@@ -663,9 +722,10 @@
     // Puts the picker and controls back the way they were for a snapshot,
     // reloading its source image if another one has been opened since.
     var restoreSnapshot = function (settings) {
+        cancelLoad();
         if (settings.img !== state.img || !sameCrop(settings.crop, state.crop)) {
             setImage(settings.img, settings.name, settings.crop, settings.credit);
-        } else if (cropper) {
+        } else if (workspace.is('cropping')) {
             closeCrop();
         }
 
@@ -786,7 +846,9 @@
 
     document.addEventListener('keydown', function (e) {
         var tag = e.target.tagName;
-        if (cropper) {
+        // A dialog opened over the crop editor handles its own keys.
+        if (document.querySelector('dialog[open]')) { return; }
+        if (workspace.is('cropping')) {
             if (e.key === 'Escape') {
                 e.preventDefault();
                 closeCrop();
@@ -796,7 +858,6 @@
             }
             return;
         }
-        if (document.querySelector('dialog[open]')) { return; }
         if (e.metaKey || e.ctrlKey || e.altKey || tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') { return; }
         if (e.key === 's' || e.key === 'S') {
             e.preventDefault();
@@ -870,8 +931,9 @@
     // Cropping
     // ======================================================================
 
-    // While crop mode is open: the original image size, the crop box (in
-    // original image pixels), the locked aspect ratio and any active drag.
+    // While cropping (workspace machine): the original image size, the crop
+    // box (in original image pixels), the locked aspect ratio and any active
+    // drag, whose mode is move, resize or draw. Null otherwise.
     var cropper = null;
     var cropContext = els.cropCanvas.getContext('2d');
 
@@ -879,18 +941,9 @@
         return a === b || (!!a && !!b && a.x === b.x && a.y === b.y && a.w === b.w && a.h === b.h);
     };
 
-    var toggleCropUi = function (open) {
-        els.cropStage.hidden = !open;
-        els.cropToolbar.hidden = !open;
-        els.stageInner.hidden = open;
-        els.readout.hidden = open;
-        els.hint.hidden = open;
-        els.sourceHeading.textContent = open ? 'Crop' : 'Source';
-    };
-
     // Shows the whole original image so a crop can be widened again later.
     var openCrop = function () {
-        if (!state.img || cropper) { return; }
+        if (!workspace.is('sampling')) { return; }
         var img = state.img;
         var scale = Math.min(1, CROP_PREVIEW_MAX_SIZE / Math.max(img.naturalWidth, img.naturalHeight));
         els.cropCanvas.width = Math.max(1, Math.round(img.naturalWidth * scale));
@@ -908,21 +961,21 @@
             drag: null
         };
         setRatioButton('free');
-        toggleCropUi(true);
+        workspace.send('CROP');
         layout();
         updateCropBox();
         els.cropStage.focus({ preventScroll: true });
     };
 
     var closeCrop = function () {
-        if (!cropper) { return; }
+        if (!workspace.is('cropping')) { return; }
         cropper = null;
-        toggleCropUi(false);
+        workspace.send('CLOSE_CROP');
         layout();
     };
 
     var applyCrop = function () {
-        if (!cropper) { return; }
+        if (!workspace.is('cropping')) { return; }
         var width = cropper.width, height = cropper.height, r = cropper.rect;
         var x = clamp(Math.round(r.x), 0, width - 1);
         var y = clamp(Math.round(r.y), 0, height - 1);
@@ -1503,8 +1556,27 @@
     // Share dialog
     // ======================================================================
 
+    // The dialog makes its session file as it opens: Safari only opens the
+    // share sheet straight from a tap, so the file has to be ready by then.
+    // A file that finishes after the dialog closed is dropped.
     var pendingFile = null;
     var pendingDetails = null;
+    var shareFlow = colourioMachine({
+        name: 'share',
+        initial: 'closed',
+        states: {
+            closed: { OPEN: 'preparing' },
+            preparing: { READY: 'ready', CLOSE: 'closed' },
+            ready: { CLOSE: 'closed' }
+        },
+        enter: function (status, made) {
+            var ready = status === 'ready';
+            pendingFile = ready ? made.file : null;
+            pendingDetails = ready ? made.details : null;
+            els.shareFileBtn.disabled = !ready;
+            els.shareDetailsBtn.disabled = !ready;
+        }
+    });
     var canShareFiles = !!(navigator.canShare && window.File &&
         navigator.canShare({ files: [new File([''], 'test.jpg', { type: 'image/jpeg' })] }));
     var canShareLinks = !!navigator.share && window.matchMedia('(pointer: coarse)').matches;
@@ -1517,20 +1589,14 @@
             ? 'Shares the stripes and palette. Your photo stays on your device.'
             : 'Reopens this exact session.';
         els.shareFileName.textContent = canShareFiles ? 'Share photo with session' : 'Download session file';
-        els.shareFileBtn.disabled = true;
-        els.shareDetailsBtn.disabled = true;
-        pendingFile = null;
+        if (!shareFlow.send('OPEN')) { return; }
         T.count('share.dialog_opened', { type: stripesOnly ? 'stripes' : 'sample' });
+        var guard = shareFlow.guard();
         var timer = T.timer('session_file.build');
-        // Build the file now: Safari only opens the share sheet straight
-        // from a tap, so it has to be ready when the button is pressed.
         buildSessionFile(function (file, details) {
             timer.end();
             T.distribution('session_file.bytes', file.size, 'byte');
-            pendingFile = file;
-            pendingDetails = details;
-            els.shareFileBtn.disabled = false;
-            els.shareDetailsBtn.disabled = false;
+            guard.send('READY', { file: file, details: details });
         });
         els.shareDialog.showModal();
     };
@@ -1647,6 +1713,8 @@
     });
     els.shareFileBtn.addEventListener('click', shareSessionFile);
     els.shareCloseBtn.addEventListener('click', function () { els.shareDialog.close(); });
+    // However it closes: a button, Escape or the backdrop.
+    els.shareDialog.addEventListener('close', function () { shareFlow.send('CLOSE'); });
     els.shareDialog.addEventListener('click', function (e) {
         if (e.target === els.shareDialog) { els.shareDialog.close(); }
     });
@@ -1669,7 +1737,9 @@
         },
         currentSample: function () {
             return state.credit && state.credit.id;
-        }
+        },
+        // Every flow's state machine, by name (see machine.js).
+        machines: window.colourioMachines
     };
 
     // Once per page load: how many visitors can use the share sheet.
