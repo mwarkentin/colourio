@@ -102,6 +102,37 @@ the canonical link, `og:url` and `og:image` at the top of `index.html`
 (`telemetry.js` and `analytics.js` read the canonical link to tell the live
 site from a copy), and `ALLOWED_ORIGINS` in `worker/wrangler.toml`.
 
+### Previews
+
+Every pull request gets its own copy of the site at
+`https://pr-<number>-colourio-preview.mwarkentin.workers.dev`, built from
+its branch merged with `master`, so it can be tried (on a phone too) before
+merging. The **Preview** workflow (`.github/workflows/preview.yml`) makes it
+on each push, comments on the pull request with its link (one comment, kept
+up to date), and deletes it when the pull request closes.
+
+- **Hosting:** a [Worker Preview](https://developers.cloudflare.com/workers/previews/)
+  of `colourio-preview` (`preview/wrangler.toml`), a Worker with nothing but
+  static assets, the same way the games site does its previews. It's never
+  deployed to production, and `wrangler preview` makes it on first use, so
+  nothing about it lives in mwarkentin/infra.
+- **What's in it:** every top-level `.html`, `.js`, `.css`, `.jpg` and
+  `.jpeg` file plus `samples/`, matched by pattern rather than by
+  `pages.yml`'s list, so new files appear without being added anywhere.
+  `preview/mark.py` then points the link-preview tags at the preview, starts
+  the title with "PR <number> · ", marks the page `noindex`, and adds a strip
+  across the top linking to the pull request.
+- **Apart from the live site:** each preview is its own origin, so its
+  storage is its own. Telemetry and analytics only run where the page's
+  canonical link names the current origin, and `mark.py` leaves that link on
+  the live site, so they stay off. The prints Worker only accepts uploads from the origins in its
+  `ALLOWED_ORIGINS`, so ordering a print from a preview ends with the print
+  file to download rather than a Zazzle link.
+- **Credentials:** the same `CLOUDFLARE_API_TOKEN` secret and
+  `CLOUDFLARE_ACCOUNT_ID` variable as the prints Worker's deploy: the
+  `colourio-prints-deploy` token from `colourio.tf` in mwarkentin/infra, which
+  can upload Workers. Pull requests from forks get no secrets and no preview.
+
 ### Link previews
 
 The Open Graph and Twitter card tags in `index.html` give links to colourio
