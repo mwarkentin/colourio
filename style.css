@@ -488,6 +488,18 @@ input[type="range"]:focus-visible::-moz-range-thumb {
     outline-offset: 3px;
 }
 
+/* While another image loads (html[data-image="loading"]; see README →
+   "State machines"), the current one dims. The delay keeps quick loads from
+   flickering. */
+html[data-image="loading"] .stage-inner {
+    opacity: 0.5;
+    transition: opacity 0.2s 0.2s;
+}
+
+html[data-image="loading"] #source {
+    cursor: progress;
+}
+
 .sample-band {
     position: absolute;
     box-shadow:

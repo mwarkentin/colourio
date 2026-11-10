@@ -1,0 +1,2 @@
+# Playwright, installed for the browser tests (see test/app.browser.test.mjs)
+node_modules/
