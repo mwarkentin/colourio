@@ -2,6 +2,10 @@
 <html lang="en">
     <head>
         <meta charset="utf-8">
+        <!-- The site's address: here and in og:url and og:image below. telemetry.js
+             and analytics.js read this link to tell the live site from a copy, so
+             it comes before them. -->
+        <link rel="canonical" href="https://colourio.michaelwarkentin.com/">
         <script src="telemetry.js"></script>
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <title>Colourio</title>
@@ -10,8 +14,8 @@
         <meta property="og:site_name" content="Colourio">
         <meta property="og:title" content="Colourio">
         <meta property="og:description" content="Turn a single line of pixels from any image into a colour-stripe wallpaper.">
-        <meta property="og:url" content="https://mwarkentin.github.io/colourio/">
-        <meta property="og:image" content="https://mwarkentin.github.io/colourio/og-image.jpg">
+        <meta property="og:url" content="https://colourio.michaelwarkentin.com/">
+        <meta property="og:image" content="https://colourio.michaelwarkentin.com/og-image.jpg">
         <meta property="og:image:type" content="image/jpeg">
         <meta property="og:image:width" content="1200">
         <meta property="og:image:height" content="630">
@@ -232,6 +236,10 @@
             </div>
         </section>
 
+        <footer class="site-foot">
+            <p>Found a bug or have an idea? <a href="https://github.com/mwarkentin/colourio/issues/new/choose" target="_blank" rel="noopener" data-feedback>Send feedback</a></p>
+        </footer>
+
         <div class="drop-overlay" aria-hidden="true">
             <div class="drop-overlay-inner">Drop to load image</div>
         </div>
@@ -353,6 +361,41 @@
             </div>
         </dialog>
 
+        <!-- feedback.js opens this from "Send feedback": a form that sends to Sentry once it has
+             loaded, and either way links to the GitHub issue forms, filled in. -->
+        <dialog class="dialog feedback-dialog" id="feedbackDialog" aria-labelledby="feedbackTitle" data-mode="github">
+            <div class="dialog-sheet">
+                <div class="dialog-head">
+                    <h2 id="feedbackTitle">Send feedback</h2>
+                    <button type="button" class="icon-btn" id="feedbackCloseBtn" aria-label="Close">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
+                    </button>
+                </div>
+                <form class="feedback-mode" data-for="sentry">
+                    <p class="dialog-intro">Found a bug, or have an idea? A replay of the last minute comes with it, so I can see what happened. Your photos are never in it, and what you type here is hidden.</p>
+                    <label class="feedback-field">
+                        <span>What happened, or what’s your idea?</span>
+                        <textarea name="message" required maxlength="4000" rows="5" class="sentry-mask"></textarea>
+                    </label>
+                    <label class="feedback-field">
+                        <span>Your email, if you’d like a reply (optional)</span>
+                        <input name="email" type="email" autocomplete="email" class="sentry-mask">
+                    </label>
+                    <div class="feedback-actions">
+                        <button type="submit" class="btn btn-primary">Send</button>
+                    </div>
+                    <p class="feedback-alt">Or on GitHub: <a href="https://github.com/mwarkentin/colourio/issues/new/choose" target="_blank" rel="noopener" data-issue="bug">report a bug</a> or <a href="https://github.com/mwarkentin/colourio/issues/new/choose" target="_blank" rel="noopener" data-issue="idea">suggest an idea</a></p>
+                </form>
+                <div class="feedback-mode" data-for="github">
+                    <p class="dialog-intro">Found a bug, or have an idea? Tell me on GitHub. The form comes filled in with your device and settings, never your photo, so you only need to say what happened, and you’ll see everything before you send it.</p>
+                    <div class="feedback-buttons">
+                        <a class="btn btn-primary" href="https://github.com/mwarkentin/colourio/issues/new/choose" target="_blank" rel="noopener" data-issue="bug">Report a bug</a>
+                        <a class="btn" href="https://github.com/mwarkentin/colourio/issues/new/choose" target="_blank" rel="noopener" data-issue="idea">Suggest an idea</a>
+                    </div>
+                </div>
+            </div>
+        </dialog>
+
         <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
         <script src="samples/catalog.js"></script>
@@ -360,5 +403,6 @@
         <script src="print.js"></script>
         <script src="wallpapers.js"></script>
         <script src="gallery.js"></script>
+        <script src="feedback.js"></script>
     </body>
 </html>
