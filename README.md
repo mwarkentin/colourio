@@ -130,11 +130,21 @@ it off, change or empty `SENTRY_DSN`. The DSN is safe to publish.
 ### Feedback
 
 The footer's "Send feedback" link (`data-feedback`) goes to this repo's issue
-forms (`.github/ISSUE_TEMPLATE/`). Once Sentry has loaded, `telemetry.js`
-opens `#feedbackDialog` instead, which sends the message and an optional email
-to Sentry's User Feedback with the last minute of the replay
-(`Sentry.captureFeedback`, in every CDN bundle). The replay keeps the rules
-above, so photos are never in it, and the form's fields are masked.
+forms (`.github/ISSUE_TEMPLATE/`). With JavaScript, `feedback.js` opens
+`#feedbackDialog` instead:
+
+- **Once Sentry has loaded,** it's a form that sends the message and an
+  optional email to Sentry's User Feedback with the last minute of the replay
+  (`Sentry.captureFeedback`, in every CDN bundle). The replay keeps the rules
+  above, so photos are never in it, and the form's fields are masked.
+- **Either way,** it links to the Bug and Idea forms, filled in through the
+  URL by their fields' ids: the device and browser, and details (the address
+  without its query string or fragment, which hold share links' colours, the
+  image's size, the settings, the window, the version and the user agent).
+  Never the photo or its file name. From the Sentry form, the links also
+  carry what was typed and the replay's id, and send the replay so far.
+
+Keep the fields `feedback.js` fills in and the forms' ids the same.
 
 ## Analytics
 

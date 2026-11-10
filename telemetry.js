@@ -115,45 +115,6 @@
   addEventListener('error', keep);
   addEventListener('unhandledrejection', keep);
 
-  // Feedback. The "Send feedback" link (data-feedback) goes to GitHub issues.
-  // Once the SDK is here it opens #feedbackDialog instead, which sends to
-  // Sentry's User Feedback with the replay's last minute (includeReplay):
-  // photos are blocked from it as always, and the form's fields are masked.
-  const wireFeedback = () => {
-    let thanks = 0;
-    const setUp = (dialog) => {
-      const form = dialog.querySelector('form');
-      dialog.querySelector('#feedbackCloseBtn').addEventListener('click', () => dialog.close());
-      dialog.addEventListener('click', (event) => {
-        if (event.target === dialog) dialog.close();
-      });
-      // A screenshot pasted here mustn't replace the photo being worked on.
-      dialog.addEventListener('paste', (event) => event.stopPropagation());
-      form.addEventListener('submit', (event) => {
-        event.preventDefault();
-        const message = form.message.value.trim();
-        if (!message) return;
-        Sentry.captureFeedback({ message, email: form.email.value.trim() || undefined }, { includeReplay: true });
-        form.reset();
-        dialog.querySelector('h2').textContent = 'Thanks! Sent.';
-        thanks = setTimeout(() => dialog.close(), 1500);
-      });
-      dialog.dataset.ready = '';
-    };
-    document.addEventListener('click', (event) => {
-      const link = event.target instanceof Element && event.target.closest('[data-feedback]');
-      const dialog = document.getElementById('feedbackDialog');
-      if (!link || !dialog || !Sentry.getClient()) return;
-      event.preventDefault();
-      if (!('ready' in dialog.dataset)) setUp(dialog);
-      // A "Thanks" still showing from the last one mustn't close this one.
-      clearTimeout(thanks);
-      dialog.querySelector('h2').textContent = 'Send feedback';
-      if (!dialog.open) dialog.showModal();
-      dialog.querySelector('textarea').focus();
-    });
-  };
-
   const script = document.createElement('script');
   Object.assign(script, { src: SDK.src, integrity: SDK.integrity, crossOrigin: 'anonymous' });
   script.onload = () => {
@@ -182,7 +143,6 @@
     early.forEach((error) => Sentry.captureException(error, { mechanism: { handled: false } }));
     ready = true;
     pending.splice(0).forEach((fn) => fn());
-    wireFeedback();
   };
   script.onerror = () => {
     failed = true;

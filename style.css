@@ -1275,17 +1275,36 @@ input[type="range"]:focus-visible::-moz-range-thumb {
 }
 
 .site-foot a,
-.feedback-actions a {
+.feedback-alt a {
     color: inherit;
 }
 
 .site-foot a:hover,
-.feedback-actions a:hover {
+.feedback-alt a:hover {
     color: var(--text);
 }
 
 .feedback-dialog {
     width: min(440px, calc(100vw - 32px));
+}
+
+.feedback-dialog[data-mode="github"] [data-for="sentry"],
+.feedback-dialog[data-mode="sentry"] [data-for="github"] {
+    display: none;
+}
+
+.feedback-mode {
+    display: grid;
+    gap: 16px;
+}
+
+.feedback-buttons {
+    display: grid;
+    gap: 8px;
+}
+
+.feedback-buttons .btn {
+    text-decoration: none;
 }
 
 .feedback-field {
@@ -1315,10 +1334,11 @@ input[type="range"]:focus-visible::-moz-range-thumb {
 
 .feedback-actions {
     display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
+    justify-content: flex-end;
+}
+
+.feedback-alt {
+    margin: 0;
     color: var(--muted);
     font-size: 13px;
 }
