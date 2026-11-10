@@ -204,8 +204,8 @@ Zazzle's [Create-a-Product API guide](https://www.zazzle.com/api) and fill in
    `zazzle.trackingCode` blank. See [Commission](#commission) below.
 3. **Declare the image domain** of your upload host (step 5) on the
    [domains page](https://www.zazzle.com/my/ambassador/domains): the Worker's
-   domain, `colourio-prints.mwarkentin.workers.dev`, or
-   `res.cloudinary.com`. Zazzle refuses images from undeclared domains.
+   domain, `prints.michaelwarkentin.com`, or `res.cloudinary.com`. Zazzle
+   refuses images from undeclared domains.
 4. **Store and templates:** [create a store](https://www.zazzle.com/my/store/create),
    then for each product make a design with an image placeholder the same shape
    as the product. Turn on **Make this a template object**, note its **URL
@@ -221,9 +221,10 @@ Zazzle's [Create-a-Product API guide](https://www.zazzle.com/api) and fill in
      after a year. Its bucket, expiry rule and deploy token are managed in
      [mwarkentin/infra](https://github.com/mwarkentin/infra) (`colourio.tf`),
      and this repo's **Prints worker** workflow deploys it; see
-     [worker/README.md](worker/README.md). It answers at
-     `https://colourio-prints.mwarkentin.workers.dev`, which is set in
-     `hosting.worker.url`.
+     [worker/README.md](worker/README.md). It answers at its custom domain,
+     `https://prints.michaelwarkentin.com` (managed in infra's
+     `worker_domains.tf`), which is set in `hosting.worker.url`. Its
+     `workers.dev` address still answers too.
    - `'cloudinary'`: create a Cloudinary account, add an **unsigned** upload
      preset (Settings → Upload), and set `hosting.cloudinary.cloudName` and
      `hosting.cloudinary.uploadPreset`. Anyone who reads the page source can

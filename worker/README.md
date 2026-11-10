@@ -15,7 +15,8 @@ Pick one with `hosting.provider` in `print.js` (see the main README's
 ```
 POST /v1/prints
   body: the PNG, with Content-Type: image/png
-  → 201 {"url": "https://colourio-prints.<subdomain>.workers.dev/v1/prints/<uuid>.png"}
+  → 201 {"url": "https://prints.michaelwarkentin.com/v1/prints/<uuid>.png"}
+         (the URL is on whichever host the upload was sent to)
 
 GET  /v1/prints/<uuid>.png      (HEAD works too)
   → 200 the PNG, cacheable for a year
@@ -70,8 +71,13 @@ The Cloudflare side is managed with OpenTofu in
 [mwarkentin/infra](https://github.com/mwarkentin/infra), in `colourio.tf`:
 the `colourio-prints` bucket, the lifecycle rule that deletes files a year
 after upload, and `colourio-prints-deploy`, an account-owned token that can
-only upload Workers. Changes there go through a pull request, whose plan is
-applied when it merges. This repo deploys the Worker's code.
+only upload Workers. The Worker's custom domain, `prints.michaelwarkentin.com`,
+is there too, in `worker_domains.tf`. Changes there go through a pull request,
+whose plan is applied when it merges. This repo deploys the Worker's code.
+
+**Don't add `routes` to `wrangler.toml`.** Declaring routes there would make
+wrangler the owner of the Worker's domains, and its next deploy would drop
+the custom domain infra manages.
 
 1. **Merge the infra pull request** that adds `colourio.tf`. Its apply makes
    the bucket, the rule and the token.
@@ -85,27 +91,26 @@ applied when it merges. This repo deploys the Worker's code.
    `npx wrangler@4.151.0 deploy`; it's skipped while `CLOUDFLARE_ACCOUNT_ID`
    is unset. After step 2, run it from the Actions tab (Run workflow on
    `master`) for the first deploy. The Worker answers at
+   `https://prints.michaelwarkentin.com`, and still at
    `https://colourio-prints.mwarkentin.workers.dev`.
 4. **Check it** with any small PNG:
 
    ```sh
-   curl -X POST https://colourio-prints.mwarkentin.workers.dev/v1/prints \
+   curl -X POST https://prints.michaelwarkentin.com/v1/prints \
      -H 'Origin: https://mwarkentin.github.io' -H 'Content-Type: image/png' \
      --data-binary @test.png
    ```
 
    It answers with the file's URL; open it to see the image.
-5. **Declare the domain on Zazzle:** add
-   `colourio-prints.mwarkentin.workers.dev` on the
+5. **Declare the domain on Zazzle:** add `prints.michaelwarkentin.com` on the
    [domains page](https://www.zazzle.com/my/ambassador/domains), with the
    same ownership option as `res.cloudinary.com`. Zazzle shows a placeholder
    instead of images from undeclared domains.
 
-`print.js` already points `hosting.worker.url` at the Worker.
-
-A custom domain (such as `prints.michaelwarkentin.com`) needs the zone on
-Cloudflare, which it isn't yet (it's on DNSimple); infra's README tracks that.
-It would also need declaring on Zazzle.
+`print.js` already points `hosting.worker.url` at
+`https://prints.michaelwarkentin.com`, so print files get URLs on that host.
+The `workers.dev` address still answers, but nothing hands it out, so it
+doesn't need declaring on Zazzle.
 
 ## Local development
 

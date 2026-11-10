@@ -28,10 +28,10 @@
             // Which host below to use: 'worker' or 'cloudinary'.
             provider: 'worker',
             // colourio's Cloudflare Worker, which keeps files in R2 (see
-            // worker/README.md). Its URL, such as
-            // 'https://colourio-prints.<your-subdomain>.workers.dev'.
+            // worker/README.md). Its URL: its custom domain, or its
+            // workers.dev address.
             worker: {
-                url: 'https://colourio-prints.mwarkentin.workers.dev'
+                url: 'https://prints.michaelwarkentin.com'
             },
             // Cloudinary, using an *unsigned* upload preset.
             cloudinary: {
