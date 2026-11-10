@@ -9,7 +9,7 @@
     var CONFIG = {
         zazzle: {
             // Your Zazzle member account ID (required), an 18-digit number.
-            memberId: '',
+            memberId: '238549209714777819',
             // Leave blank. Zazzle counts any link carrying your Ambassador ID
             // (rf=) as a Cross-Promotion Link, which earns only 15% on wall
             // art; links to your own Create-a-Product pages without it can
@@ -28,10 +28,10 @@
             // Which host below to use: 'worker' or 'cloudinary'.
             provider: 'worker',
             // colourio's Cloudflare Worker, which keeps files in R2 (see
-            // worker/README.md). Its URL, such as
-            // 'https://colourio-prints.<your-subdomain>.workers.dev'.
+            // worker/README.md). Its URL: its custom domain, or its
+            // workers.dev address.
             worker: {
-                url: ''
+                url: 'https://prints.michaelwarkentin.com'
             },
             // Cloudinary, using an *unsigned* upload preset.
             cloudinary: {
@@ -49,7 +49,7 @@
         // name of its image object (Zazzle's default is "image1"). Sizes in
         // inches; match the template's image placeholder.
         products: [
-            { id: 'poster-portrait', name: 'Poster', width: 18, height: 24, productId: '', imageParam: 'image1' },
+            { id: 'poster-portrait', name: 'Poster', width: 18, height: 24, productId: '256932064593255212', imageParam: 'image1' },
             { id: 'poster-landscape', name: 'Poster', width: 24, height: 18, productId: '', imageParam: 'image1' },
             { id: 'canvas', name: 'Canvas print', width: 16, height: 20, productId: '', imageParam: 'image1' },
             { id: 'square', name: 'Square print', width: 12, height: 12, productId: '', imageParam: 'image1' }
