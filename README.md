@@ -2,7 +2,7 @@
 
 Turn a single line of pixels from any image into a colour-stripe wallpaper.
 
-**Live at <https://mwarkentin.github.io/colourio/>**
+**Live at <https://colourio.michaelwarkentin.com/>**
 
 Move over the source image to pick a row (or column) of pixels; colourio
 stretches it across the whole output. Click to lock the line, then download
@@ -31,14 +31,27 @@ workflow by hand from the Actions tab.
 The print upload Worker in `worker/` deploys separately, through
 `.github/workflows/worker.yml`; see [worker/README.md](worker/README.md).
 
+### Address
+
+colourio answers at `colourio.michaelwarkentin.com`. The domain is set in the
+repo's Settings → Pages (with a custom Actions workflow GitHub reads it there
+and ignores a `CNAME` file), and its DNS record, a DNS-only CNAME to
+`mwarkentin.github.io`, is in mwarkentin/infra (`dns_michaelwarkentin.tf`).
+GitHub redirects the old `mwarkentin.github.io/colourio/` links to it, query
+strings and `#fragments` included, so old share links still open.
+
+The address appears in three places to change together if it moves again:
+the canonical link, `og:url` and `og:image` at the top of `index.html`
+(`telemetry.js` and `analytics.js` read the canonical link to tell the live
+site from a copy), and `ALLOWED_ORIGINS` in `worker/wrangler.toml`.
+
 ### Link previews
 
 The Open Graph and Twitter card tags in `index.html` give links to colourio
 a title, description and `og-image.jpg` (1200×630) in Slack, iMessage,
 Bluesky, Mastodon, Threads, Reddit and Pinterest. The image is the Cosmic
 Cliffs sample beside the stripes from one of its rows. `og:url` and
-`og:image` must be absolute, so change both if the site moves to another
-domain.
+`og:image` must be absolute (see [Address](#address)).
 
 ## Sharing
 
@@ -85,7 +98,7 @@ the top of `wallpapers.js`.
 
 `telemetry.js` sends errors, performance traces, session replays, logs and
 metrics to Sentry, like the games site. It does nothing until `SENTRY_DSN` is set, and only runs
-on `mwarkentin.github.io/colourio`, so local previews send nothing. It loads
+at the address in `index.html`'s canonical link, so local previews send nothing. It loads
 Sentry's SDK from `browser.sentry-cdn.com`, pinned to a version with an
 integrity hash, and the deploy workflow stamps each release with its commit.
 
@@ -132,14 +145,15 @@ it off, change or empty `SENTRY_DSN`. The DSN is safe to publish.
 `analytics.js` counts page views with
 [Counterscale](https://counterscale.dev), the same self-hosted analytics as the
 tools and games sites, under the site ID `colourio` at
-`stats.michaelwarkentin.com`. It's separate from telemetry and only
-runs on `mwarkentin.github.io/colourio`, so local previews send nothing.
+`stats.michaelwarkentin.com`. It's separate from telemetry and, like it, only
+runs at the address in `index.html`'s canonical link, so local previews send
+nothing.
 
 What it sends, once per page load:
 
-- The page's path, such as `/colourio/`.
+- The page's path, which is always `/`.
 - Where the visitor came from, as an origin only (`https://example.com`).
-  Moves within `mwarkentin.github.io` count as no referrer.
+  Moves within colourio count as no referrer.
 - Counterscale adds the browser and device from the user agent, and the
   country Cloudflare works out from the IP address, which it doesn't keep.
 
