@@ -30,7 +30,8 @@ Errors: 403 for an upload from a page not in ALLOWED_ORIGINS,
 ```
 
 **Checks.** Uploads must come from a page in `ALLOWED_ORIGINS`
-(`wrangler.toml`): colourio on GitHub Pages, plus localhost for testing. The
+(`wrangler.toml`): colourio at colourio.michaelwarkentin.com, and at its old
+address on GitHub Pages while the move finishes, plus localhost for testing. The
 Worker checks the PNG's signature, header and end without decoding it, and
 refuses images larger than colourio ever makes. These stop other sites using
 it as free image hosting, not a determined script: an `Origin` header is easy
@@ -97,7 +98,7 @@ the custom domain infra manages.
 
    ```sh
    curl -X POST https://prints.michaelwarkentin.com/v1/prints \
-     -H 'Origin: https://mwarkentin.github.io' -H 'Content-Type: image/png' \
+     -H 'Origin: https://colourio.michaelwarkentin.com' -H 'Content-Type: image/png' \
      --data-binary @test.png
    ```
 

@@ -331,6 +331,8 @@
         state.height = height;
         state.naturalWidth = cropW;
         state.naturalHeight = cropH;
+        // For the feedback dialog's details (feedback.js).
+        els.source.dataset.imageSize = cropW + '×' + cropH;
         state.name = slugify(name);
         state.x = Math.floor(width / 2);
         state.y = Math.floor(height / 2);

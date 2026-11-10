@@ -1271,6 +1271,91 @@ html[data-image="loading"] #source {
 }
 
 /* ==========================================================================
+   Feedback
+   ========================================================================== */
+
+.site-foot {
+    max-width: 1440px;
+    margin: 0 auto;
+    padding: 0 20px 24px;
+    color: var(--muted);
+    font-size: 13px;
+}
+
+.site-foot p {
+    margin: 0;
+}
+
+.site-foot a,
+.feedback-alt a {
+    color: inherit;
+}
+
+.site-foot a:hover,
+.feedback-alt a:hover {
+    color: var(--text);
+}
+
+.feedback-dialog {
+    width: min(440px, calc(100vw - 32px));
+}
+
+.feedback-dialog[data-mode="github"] [data-for="sentry"],
+.feedback-dialog[data-mode="sentry"] [data-for="github"] {
+    display: none;
+}
+
+.feedback-mode {
+    display: grid;
+    gap: 16px;
+}
+
+.feedback-buttons {
+    display: grid;
+    gap: 8px;
+}
+
+.feedback-buttons .btn {
+    text-decoration: none;
+}
+
+.feedback-field {
+    display: grid;
+    gap: 6px;
+    color: var(--muted);
+    font-size: 13px;
+}
+
+/* 16px, so iOS doesn't zoom into the field. */
+.feedback-field textarea,
+.feedback-field input {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--panel-2);
+    color: var(--text);
+    font: inherit;
+    font-size: 16px;
+}
+
+.feedback-field textarea {
+    min-height: 120px;
+    resize: vertical;
+}
+
+.feedback-actions {
+    display: flex;
+    justify-content: flex-end;
+}
+
+.feedback-alt {
+    margin: 0;
+    color: var(--muted);
+    font-size: 13px;
+}
+
+/* ==========================================================================
    Session details
    ========================================================================== */
 

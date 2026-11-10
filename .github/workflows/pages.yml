@@ -30,7 +30,7 @@ jobs:
       - name: Collect site files
         run: |
           mkdir _site
-          cp index.html telemetry.js analytics.js machine.js app.js print.js wallpapers.js gallery.js style.css sample-image.jpeg og-image.jpg _site/
+          cp index.html telemetry.js analytics.js machine.js app.js print.js wallpapers.js gallery.js feedback.js style.css sample-image.jpeg og-image.jpg _site/
           cp -r samples _site/
 
       # Pages lets browsers cache files for 10 minutes; versioning the asset
