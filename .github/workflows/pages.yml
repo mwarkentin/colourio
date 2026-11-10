@@ -22,9 +22,9 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/configure-pages@v5
+      - uses: actions/configure-pages@v6
 
       # Publish only the files the site needs, not the whole repo.
       - name: Collect site files
@@ -46,9 +46,9 @@ jobs:
           sed -i -E "s/<script src=\"telemetry\.js/<script data-release=\"${GITHUB_SHA}\" src=\"telemetry.js/" _site/index.html
           grep -E "data-release=\"[0-9a-f]{40}\" src=\"telemetry\.js" _site/index.html
 
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/upload-pages-artifact@v5
         with:
           path: _site
 
       - id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5

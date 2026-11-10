@@ -9,9 +9,10 @@
 // browser and device from the user agent and the country Cloudflare works
 // out from the IP address, which it doesn't keep. It sets no cookies.
 (() => {
-  // Counterscale's address, as the installer printed it. While it's empty,
-  // nothing loads and nothing is sent.
-  const COUNTERSCALE_URL = 'https://counterscale.mwarkentin.workers.dev';
+  // Counterscale's address: its custom domain, made by OpenTofu in
+  // mwarkentin/infra (worker_domains.tf). While it's empty, nothing loads
+  // and nothing is sent.
+  const COUNTERSCALE_URL = 'https://stats.michaelwarkentin.com';
   const SITE_ID = 'colourio';
   // Counterscale's own tracker, checked against this hash before it runs.
   // Keep it on the version the Counterscale install runs, and update the URL
@@ -22,7 +23,10 @@
   };
 
   // Only the live site reports; local previews and tests send nothing.
-  const live = location.hostname === 'mwarkentin.github.io' && location.pathname.startsWith('/colourio');
+  // That's the address in index.html's canonical link, which comes before
+  // this script.
+  const canonical = document.querySelector('link[rel="canonical"]');
+  const live = Boolean(canonical) && location.origin === new URL(canonical.href).origin;
   if (!COUNTERSCALE_URL || !live) return;
 
   // Another site's origin, or this one's, which the tracker records as no

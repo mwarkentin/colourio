@@ -14,9 +14,11 @@ enabled = true
 invocation_logs = false
 
 [vars]
-# Pages allowed to upload. The localhost entries are for testing colourio
+# Pages allowed to upload: colourio at its own address, and at its old one on
+# GitHub Pages until the move there is done (a tab opened before the move
+# keeps the old origin). The localhost entries are for testing colourio
 # against `wrangler dev`.
-ALLOWED_ORIGINS = "https://mwarkentin.github.io,http://localhost:8000,http://127.0.0.1:8000"
+ALLOWED_ORIGINS = "https://colourio.michaelwarkentin.com,https://mwarkentin.github.io,http://localhost:8000,http://127.0.0.1:8000"
 
 [[r2_buckets]]
 binding = "PRINTS"

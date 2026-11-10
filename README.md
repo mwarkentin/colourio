@@ -2,7 +2,7 @@
 
 Turn a single line of pixels from any image into a colour-stripe wallpaper.
 
-**Live at <https://mwarkentin.github.io/colourio/>**
+**Live at <https://colourio.michaelwarkentin.com/>**
 
 Move over the source image to pick a row (or column) of pixels; colourio
 stretches it across the whole output. Click to lock the line, then download
@@ -31,14 +31,27 @@ workflow by hand from the Actions tab.
 The print upload Worker in `worker/` deploys separately, through
 `.github/workflows/worker.yml`; see [worker/README.md](worker/README.md).
 
+### Address
+
+colourio answers at `colourio.michaelwarkentin.com`. The domain is set in the
+repo's Settings → Pages (with a custom Actions workflow GitHub reads it there
+and ignores a `CNAME` file), and its DNS record, a DNS-only CNAME to
+`mwarkentin.github.io`, is in mwarkentin/infra (`dns_michaelwarkentin.tf`).
+GitHub redirects the old `mwarkentin.github.io/colourio/` links to it, query
+strings and `#fragments` included, so old share links still open.
+
+The address appears in three places to change together if it moves again:
+the canonical link, `og:url` and `og:image` at the top of `index.html`
+(`telemetry.js` and `analytics.js` read the canonical link to tell the live
+site from a copy), and `ALLOWED_ORIGINS` in `worker/wrangler.toml`.
+
 ### Link previews
 
 The Open Graph and Twitter card tags in `index.html` give links to colourio
 a title, description and `og-image.jpg` (1200×630) in Slack, iMessage,
 Bluesky, Mastodon, Threads, Reddit and Pinterest. The image is the Cosmic
 Cliffs sample beside the stripes from one of its rows. `og:url` and
-`og:image` must be absolute, so change both if the site moves to another
-domain.
+`og:image` must be absolute (see [Address](#address)).
 
 ## Sharing
 
@@ -85,7 +98,7 @@ the top of `wallpapers.js`.
 
 `telemetry.js` sends errors, performance traces, session replays, logs and
 metrics to Sentry, like the games site. It does nothing until `SENTRY_DSN` is set, and only runs
-on `mwarkentin.github.io/colourio`, so local previews send nothing. It loads
+at the address in `index.html`'s canonical link, so local previews send nothing. It loads
 Sentry's SDK from `browser.sentry-cdn.com`, pinned to a version with an
 integrity hash, and the deploy workflow stamps each release with its commit.
 
@@ -151,14 +164,15 @@ Keep the fields `feedback.js` fills in and the forms' ids the same.
 `analytics.js` counts page views with
 [Counterscale](https://counterscale.dev), the same self-hosted analytics as the
 tools and games sites, under the site ID `colourio` at
-`counterscale.mwarkentin.workers.dev`. It's separate from telemetry and only
-runs on `mwarkentin.github.io/colourio`, so local previews send nothing.
+`stats.michaelwarkentin.com`. It's separate from telemetry and, like it, only
+runs at the address in `index.html`'s canonical link, so local previews send
+nothing.
 
 What it sends, once per page load:
 
-- The page's path, such as `/colourio/`.
+- The page's path, which is always `/`.
 - Where the visitor came from, as an origin only (`https://example.com`).
-  Moves within `mwarkentin.github.io` count as no referrer.
+  Moves within colourio count as no referrer.
 - Counterscale adds the browser and device from the user agent, and the
   country Cloudflare works out from the IP address, which it doesn't keep.
 
@@ -223,8 +237,8 @@ Zazzle's [Create-a-Product API guide](https://www.zazzle.com/api) and fill in
    `zazzle.trackingCode` blank. See [Commission](#commission) below.
 3. **Declare the image domain** of your upload host (step 5) on the
    [domains page](https://www.zazzle.com/my/ambassador/domains): the Worker's
-   domain, such as `colourio-prints.<your-subdomain>.workers.dev`, or
-   `res.cloudinary.com`. Zazzle refuses images from undeclared domains.
+   domain, `prints.michaelwarkentin.com`, or `res.cloudinary.com`. Zazzle
+   refuses images from undeclared domains.
 4. **Store and templates:** [create a store](https://www.zazzle.com/my/store/create),
    then for each product make a design with an image placeholder the same shape
    as the product. Turn on **Make this a template object**, note its **URL
@@ -237,8 +251,13 @@ Zazzle's [Create-a-Product API guide](https://www.zazzle.com/api) and fill in
    colourio uploads it first. Set `hosting.provider` to the host you use:
    - `'worker'`: colourio's own Cloudflare Worker, which keeps files in R2.
      It checks every upload, limits uploads per visitor and deletes files
-     after a year. Follow [worker/README.md](worker/README.md) to deploy it,
-     then set `hosting.worker.url`.
+     after a year. Its bucket, expiry rule and deploy token are managed in
+     [mwarkentin/infra](https://github.com/mwarkentin/infra) (`colourio.tf`),
+     and this repo's **Prints worker** workflow deploys it; see
+     [worker/README.md](worker/README.md). It answers at its custom domain,
+     `https://prints.michaelwarkentin.com` (managed in infra's
+     `worker_domains.tf`), which is set in `hosting.worker.url`. Its
+     `workers.dev` address still answers too.
    - `'cloudinary'`: create a Cloudinary account, add an **unsigned** upload
      preset (Settings → Upload), and set `hosting.cloudinary.cloudName` and
      `hosting.cloudinary.uploadPreset`. Anyone who reads the page source can

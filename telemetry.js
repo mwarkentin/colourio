@@ -22,7 +22,10 @@
   };
 
   // Only the live site reports; local previews and tests send nothing.
-  const live = location.hostname === 'mwarkentin.github.io' && location.pathname.startsWith('/colourio');
+  // That's the address in index.html's canonical link, which comes before
+  // this script.
+  const canonical = document.querySelector('link[rel="canonical"]');
+  const live = Boolean(canonical) && location.origin === new URL(canonical.href).origin;
   const enabled = Boolean(SENTRY_DSN) && live;
 
   // Attribute values must look like identifiers ("upload", "1920x1080",
