@@ -53,7 +53,9 @@ up to date), and deletes it when the pull request closes.
   across the top linking to the pull request.
 - **Apart from the live site:** each preview is its own origin, so its
   storage is its own. Telemetry and analytics check the hostname, so they
-  stay off. Prints stay in demo mode.
+  stay off. The prints Worker only accepts uploads from the origins in its
+  `ALLOWED_ORIGINS`, so ordering a print from a preview ends with the print
+  file to download rather than a Zazzle link.
 - **Credentials:** the same `CLOUDFLARE_API_TOKEN` secret and
   `CLOUDFLARE_ACCOUNT_ID` variable as the prints Worker's deploy: the
   `colourio-prints-deploy` token from `colourio.tf` in mwarkentin/infra, which

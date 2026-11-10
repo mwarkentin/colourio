@@ -113,7 +113,7 @@ jobs:
           body="$marker
           **Preview:** $SITE (updated for ${SHA:0:7})
 
-          Built from this branch merged with master. The preview is its own origin, so its snapshots and settings are kept apart from the live site's, and telemetry and analytics stay off. Prints stay in demo mode. It's deleted when this pull request closes."
+          Built from this branch merged with master. The preview is its own origin, so its snapshots and settings are kept apart from the live site's, and telemetry and analytics stay off. The prints Worker only accepts uploads from the live site, so ordering a print here ends with the print file to download. It's deleted when this pull request closes."
           id="$(gh api "repos/$GITHUB_REPOSITORY/issues/$PR/comments" --paginate \
             --jq "[.[] | select(.user.login == \"github-actions[bot]\" and (.body | startswith(\"$marker\")))][0].id // empty" | head -n 1)"
           if [ -n "$id" ]; then
