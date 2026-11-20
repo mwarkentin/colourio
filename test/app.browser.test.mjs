@@ -16,7 +16,10 @@ import { after, before, describe, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
-const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg' };
+const TYPES = {
+  '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
+  '.png': 'image/png', '.svg': 'image/svg+xml', '.webmanifest': 'application/manifest+json',
+};
 
 let playwright = null;
 try {
@@ -389,5 +392,57 @@ describe('colourio in a browser', { skip: !playwright && !process.env.CI && 'Pla
     await page.click('#printGoBtn');
     await page.waitForSelector('html[data-print="ready"]');
     assert.equal(attempts, 2);
+  });
+
+  test('the manifest loads, with the icons Add to Home Screen needs', async (t) => {
+    const page = await open(t);
+    const href = await page.evaluate(() => document.querySelector('link[rel="manifest"]').href);
+    const response = await page.request.get(href);
+    assert.equal(response.ok(), true);
+    const manifest = JSON.parse(await response.text());
+    assert.equal(manifest.name, 'colourio');
+    assert.equal(manifest.short_name, 'colourio');
+    assert.equal(manifest.start_url, '/');
+    assert.equal(manifest.scope, '/');
+    assert.equal(manifest.display, 'standalone');
+    assert.match(manifest.theme_color, /^#[0-9a-f]{6}$/);
+    assert.match(manifest.background_color, /^#[0-9a-f]{6}$/);
+    const icons = (purpose, sizes) => manifest.icons.filter((i) => i.purpose === purpose && i.sizes === sizes);
+    assert.equal(icons('any', '192x192').length, 1);
+    assert.equal(icons('any', '512x512').length, 1);
+    assert.equal(icons('maskable', '512x512').length, 1);
+
+    // Every icon, and the apple-touch-icon, loads at the size it claims.
+    const appleIcon = await page.evaluate(() => document.querySelector('link[rel="apple-touch-icon"]').href);
+    const images = [
+      ...manifest.icons.map((icon) => ({ src: new URL(icon.src, href).href, sizes: icon.sizes })),
+      { src: appleIcon, sizes: '180x180' },
+    ];
+    for (const { src, sizes } of images) {
+      const size = await page.evaluate((url) => new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => resolve(`${img.naturalWidth}x${img.naturalHeight}`);
+        img.onerror = () => reject(new Error(`${url} didn't load`));
+        img.src = url;
+      }), src);
+      if (sizes !== 'any') assert.equal(size, sizes, src);
+    }
+  });
+
+  test('a share link opens straight to its sample', async (t) => {
+    // As when a share link opens the installed app, rather than the hash
+    // changing on a page that's already open.
+    const context = await browser.newContext();
+    t.after(() => context.close());
+    await context.route((url) => !url.href.startsWith(base), (route) => route.abort());
+    const page = await context.newPage();
+    const errors = [];
+    page.on('pageerror', (error) => errors.push(error));
+    await page.goto(`${base}#v=1&d=column&b=crisp&o=match&s=great-wave&p=10&t=3`);
+    await page.waitForFunction(() => window.colourio?.currentSample() === 'great-wave');
+    await page.waitForSelector('html[data-image="idle"]');
+    assert.equal(await page.isChecked('#dirColumn'), true);
+    assert.equal(await page.textContent('#lockLabel'), 'Locked');
+    assert.deepEqual(errors, []);
   });
 });

@@ -52,7 +52,7 @@ jobs:
       - name: Collect site files
         run: |
           mkdir _site
-          cp *.html *.js *.css *.jpg *.jpeg _site/
+          cp *.html *.js *.css *.jpg *.jpeg *.png *.svg *.webmanifest _site/
           cp -r samples _site/
 
       - name: Mark it as this pull request's preview
