@@ -27,30 +27,41 @@
         // worker/README.md). Its domain must be declared on Zazzle's domains
         // page. While this is empty, the dialog stays in demo mode.
         printsUrl: 'https://prints.michaelwarkentin.com',
-        // Print resolution, capped so large prints stay within the canvas
-        // size limits of mobile browsers. Zazzle asks for at least 100 ppi
-        // for posters and prints.
-        ppi: 150,
+        // Every print file uses this many pixels, the most that stays within
+        // the canvas size limits of mobile browsers. Buyers can pick any size
+        // of a shape on Zazzle, so the file is as sharp as it can be for the
+        // biggest. Zazzle asks for at least 100 ppi for posters and prints.
         maxPixels: 16000000,
-        // One entry per Zazzle product template. `productId` is the
-        // template's 18-digit product ID and `imageParam` the URL parameter
-        // name of its image object (Zazzle's default is "image1"). Sizes in
-        // inches; match the template's image placeholder. `wrap` is the
+        // One entry per Zazzle product template, grouped in the dialog by
+        // `material` (its name as shown, e.g. 'Poster' or 'Metal'), in the
+        // order materials first appear here; shapes keep their order too.
+        // Adding a shape, or a whole new material, is one entry here.
+        // `id` is a short, unique identifier, used in file names and
+        // telemetry. `productId` is the template's 18-digit product ID
+        // (leave it empty to keep that product in demo mode) and
+        // `imageParam` the URL parameter name of its image object (Zazzle's
+        // default is "image1"). `width` and `height` are the template's image
+        // placeholder in inches. They set the shape the dialog shows (e.g.
+        // Portrait 3:4); buyers choose the size on Zazzle. Each shape needs
+        // its own template: one set to a size of another shape crops to its
+        // own shape and then stretches. `wrap` is the
         // margin in inches that a canvas folds round its frame: the file gets
         // that much extra on every side, mirrored from the stripes, so the
         // whole width × height shows on the front.
         products: [
-            { id: 'poster-portrait', name: 'Poster', width: 18, height: 24, productId: '256932064593255212', imageParam: 'image1' },
-            { id: 'poster-landscape', name: 'Poster', width: 24, height: 18, productId: '256970220779415887', imageParam: 'image1' },
+            { id: 'poster-portrait', material: 'Poster', width: 18, height: 24, productId: '256932064593255212', imageParam: 'image1' },
+            { id: 'poster-landscape', material: 'Poster', width: 24, height: 18, productId: '256970220779415887', imageParam: 'image1' },
+            { id: 'square', material: 'Poster', width: 12, height: 12, productId: '256382642826496595', imageParam: 'image1' },
             // RealView puts the front edge about 1.75 in from the file's
             // edge: the 1.25 in frame depth plus the fold to the back.
-            { id: 'canvas', name: 'Canvas print', width: 16, height: 20, wrap: 1.75, productId: '256192989000270834', imageParam: 'image1' },
-            { id: 'square', name: 'Poster', width: 12, height: 12, productId: '256382642826496595', imageParam: 'image1' }
+            { id: 'canvas', material: 'Canvas', width: 16, height: 20, wrap: 1.75, productId: '256192989000270834', imageParam: 'image1' }
         ]
     };
 
+    // Material cards' thumbnails fit this box; shape options' a smaller one.
     var THUMB_WIDTH = 100;
     var THUMB_HEIGHT = 80;
+    var SHAPE_THUMB = 32;
 
     var $ = function (id) { return document.getElementById(id); };
 
@@ -58,7 +69,8 @@
         printBtn: $('printBtn'),
         dialog: $('printDialog'),
         closeBtn: $('printCloseBtn'),
-        products: $('printProducts'),
+        materials: $('printMaterials'),
+        shapes: $('printShapes'),
         demo: $('printDemo'),
         status: $('printStatus'),
         link: $('printLink'),
@@ -69,7 +81,28 @@
         mockup: $('printMockup')
     };
 
+    // Materials in the order they first appear in CONFIG.products, each
+    // with its sizes: [{ id, name, products }]. `id` is the name in lower
+    // case with dashes, e.g. 'canvas'.
+    var materials = [];
+    CONFIG.products.forEach(function (product) {
+        var name = product.material || 'Poster';
+        var id = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+        var material = materials.filter(function (m) { return m.id === id; })[0];
+        if (!material) {
+            material = { id: id, name: name, products: [] };
+            materials.push(material);
+        }
+        material.products.push(product);
+    });
+    var materialOf = function (product) {
+        return materials.filter(function (m) { return m.products.indexOf(product) !== -1; })[0];
+    };
+
     var selected = CONFIG.products[0];
+    // The shape last picked in each material, so switching back keeps it.
+    var picked = {};
+    materials.forEach(function (m) { picked[m.id] = m.products[0]; });
     var T = window.colourio.telemetry;
 
     var printsUrl = CONFIG.printsUrl.replace(/\/+$/, '');
@@ -84,7 +117,7 @@
         var margin = product.wrap || 0;
         var width = product.width + 2 * margin;
         var height = product.height + 2 * margin;
-        var ppi = Math.min(CONFIG.ppi, Math.sqrt(CONFIG.maxPixels / (width * height)));
+        var ppi = Math.sqrt(CONFIG.maxPixels / (width * height));
         var wrap = Math.round(margin * ppi);
         return {
             width: Math.round(product.width * ppi) + 2 * wrap,
@@ -233,17 +266,17 @@
         if (status === 'rendering') {
             setStatus('Rendering ' + size.width + ' × ' + size.height + ' px print file…', 'busy');
         } else if (status === 'renderFailed') {
-            setStatus('Couldn’t create the print file. Try a smaller product.', 'error');
+            setStatus('Couldn’t create the print file. Try another shape.', 'error');
         } else if (status === 'demoReady') {
             setStatus('Print file ready · ' + size.width + ' × ' + size.height + ' px (' + size.ppi +
-                ' ppi) · ' + formatBytes(file.blob.size), 'done');
+                ' ppi at ' + sizeText(file.product) + ') · ' + formatBytes(file.blob.size), 'done');
             els.linkText.textContent = zazzleUrl(file.product, exampleImageUrl(), imageCode(file.filename));
         } else if (status === 'uploading') {
             setStatus('Uploading print file…', 'busy');
         } else if (status === 'uploadFailed') {
             setStatus('Upload failed (' + data.message + '). You can still download the print file.', 'error');
         } else if (status === 'ready') {
-            var name = file.product.name.toLowerCase();
+            var name = materialOf(file.product).name.toLowerCase();
             els.mockup.src = realViewUrl(file.product, data.imageUrl);
             els.mockup.alt = 'Preview of the ' + name + ' on Zazzle';
             els.open.href = data.link;
@@ -305,7 +338,7 @@
         });
     };
 
-    // Picking another product (SELECT) or closing the dialog starts over,
+    // Picking another shape or material (SELECT) or closing the dialog starts over,
     // and drops any render or upload still under way.
     var flow = colourioMachine({
         name: 'print',
@@ -329,46 +362,106 @@
         }
     });
 
-    var buildProducts = function () {
-        els.products.innerHTML = '';
-        CONFIG.products.forEach(function (product) {
-            var card = document.createElement('label');
-            card.className = 'print-product';
+    // Stripes drawn at a product's shape, fitted to maxWidth × maxHeight
+    // CSS px and drawn at 2x for sharpness.
+    var thumbnail = function (product, maxWidth, maxHeight) {
+        var scale = Math.min(maxWidth / product.width, maxHeight / product.height);
+        var width = Math.max(1, Math.round(product.width * scale));
+        var height = Math.max(1, Math.round(product.height * scale));
+        var thumb = window.colourio.render(width * 2, height * 2);
+        thumb.className = 'print-thumb';
+        thumb.style.width = width + 'px';
+        thumb.style.height = height + 'px';
+        return thumb;
+    };
 
-            var input = document.createElement('input');
-            input.type = 'radio';
-            input.name = 'printProduct';
-            input.value = product.id;
-            input.checked = product === selected;
-            input.addEventListener('change', function () {
-                selected = product;
-                flow.send('SELECT');
+    var span = function (className, text) {
+        var el = document.createElement('span');
+        el.className = className;
+        if (text) { el.textContent = text; }
+        return el;
+    };
+
+    var sizeText = function (product) {
+        return product.width + ' × ' + product.height + ' in';
+    };
+
+    var shapeName = function (product) {
+        if (product.width === product.height) { return 'Square'; }
+        return product.width > product.height ? 'Landscape' : 'Portrait';
+    };
+
+    // Width to height in lowest terms, e.g. "3:4" for 18 × 24 in.
+    var ratio = function (product) {
+        var gcd = function (a, b) { return b ? gcd(b, a % b) : a; };
+        var w = Math.round(product.width * 100);
+        var h = Math.round(product.height * 100);
+        var d = gcd(w, h);
+        return w / d + ':' + h / d;
+    };
+
+    // A radio button inside a card-like label; the label is what's clicked.
+    var option = function (className, groupName, value, checked, onPick) {
+        var label = document.createElement('label');
+        label.className = className;
+        var input = document.createElement('input');
+        input.type = 'radio';
+        input.name = groupName;
+        input.value = value;
+        input.checked = checked;
+        input.addEventListener('change', onPick);
+        label.appendChild(input);
+        return label;
+    };
+
+    var pick = function (product) {
+        selected = product;
+        picked[materialOf(product).id] = product;
+        flow.send('SELECT');
+    };
+
+    // The material card's thumbnail shows its current shape.
+    var buildMaterialThumb = function (material) {
+        var frame = els.materials.querySelector('[data-material="' + material.id + '"] .print-frame');
+        if (!frame) { return; }
+        frame.innerHTML = '';
+        var art = span('print-art');
+        art.appendChild(thumbnail(picked[material.id], THUMB_WIDTH, THUMB_HEIGHT));
+        frame.appendChild(art);
+    };
+
+    var buildShapes = function () {
+        var material = materialOf(selected);
+        els.shapes.innerHTML = '';
+        els.shapes.setAttribute('aria-label', material.name + ' shape');
+        material.products.forEach(function (product) {
+            var card = option('print-shape-option', 'printShape', product.id, product === selected, function () {
+                pick(product);
+                buildMaterialThumb(material);
             });
-
-            // Preview at the product's shape, drawn at 2x for sharpness.
-            var scale = Math.min(THUMB_WIDTH / product.width, THUMB_HEIGHT / product.height);
-            var width = Math.round(product.width * scale);
-            var height = Math.round(product.height * scale);
-            var thumb = window.colourio.render(width * 2, height * 2);
-            thumb.className = 'print-thumb';
-            thumb.style.width = width + 'px';
-            thumb.style.height = height + 'px';
-
-            var frame = document.createElement('span');
-            frame.className = 'print-frame';
-            frame.appendChild(thumb);
-
-            var name = document.createElement('span');
-            name.className = 'print-name';
-            name.textContent = product.name;
-
-            var size = document.createElement('span');
-            size.className = 'print-size';
-            size.textContent = product.width + ' × ' + product.height + ' in';
-
-            card.append(input, frame, name, size);
-            els.products.appendChild(card);
+            var frame = span('print-shape-frame');
+            frame.appendChild(thumbnail(product, SHAPE_THUMB, SHAPE_THUMB));
+            var text = span('print-shape-text');
+            text.append(span('print-name', shapeName(product)), span('print-size', ratio(product)));
+            card.append(frame, text);
+            els.shapes.appendChild(card);
         });
+    };
+
+    var buildProducts = function () {
+        els.materials.innerHTML = '';
+        materials.forEach(function (material) {
+            var card = option('print-product print-material', 'printMaterial', material.id, material === materialOf(selected), function () {
+                pick(picked[material.id]);
+                buildShapes();
+            });
+            card.dataset.material = material.id;
+            var count = material.products.length;
+            card.append(span('print-frame'), span('print-name', material.name), span('print-size', count === 1 ? shapeName(material.products[0]) + ' · ' + ratio(material.products[0]) : count + ' shapes'));
+            els.materials.appendChild(card);
+            buildMaterialThumb(material);
+        });
+        buildShapes();
     };
 
     els.printBtn.addEventListener('click', function () {

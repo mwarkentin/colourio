@@ -304,8 +304,10 @@ startup.
 
 ## Prints (Zazzle)
 
-**Order a print** renders the current stripes as a print-resolution PNG for the
-chosen product, uploads it so Zazzle can fetch it, and opens Zazzle's product
+**Order a print** asks for a material (Poster, Canvas, …) and then a shape
+within it (Portrait 3:4, Square 1:1, …); buyers pick the size on Zazzle. It
+renders the current stripes as a print-resolution PNG for that
+product, uploads it so Zazzle can fetch it, and opens Zazzle's product
 page with the image on it. Zazzle handles checkout, printing and shipping, and
 referred sales earn through your Zazzle Ambassador account. The dialog tells
 buyers that colourio earns a commission on orders.
@@ -332,8 +334,9 @@ Zazzle's [Create-a-Product API guide](https://www.zazzle.com/api) and fill in
    Parameter Name** (default `image1`, goes in `imageParam`), and set fit/fill to
    **Fill**. Choose **Done → Sell It** and set **Make product a template** to
    Yes. Copy the 18-digit number at the end of the product's URL into
-   `productId`. Templates can't be edited once posted, so test one before making
-   the rest. A canvas's design area includes the part that wraps round the
+   `productId`. Each shape needs its own template: a template set to another
+   size crops the image to its own shape and then stretches it. Templates
+   can't be edited once posted, so test one before making the rest. A canvas's design area includes the part that wraps round the
    frame, so give its product a `wrap` (in inches): colourio then adds that
    much on every side, mirrored from the stripes, so the whole design shows on
    the front. Check it in RealView with a test image that has a border.
@@ -348,7 +351,23 @@ Zazzle's [Create-a-Product API guide](https://www.zazzle.com/api) and fill in
    `worker_domains.tf`), which is set in `printsUrl`. Its `workers.dev`
    address still answers too. While `printsUrl` is empty, the dialog stays
    in demo mode.
-6. **Test:** generate a link and compare it with Zazzle's
+6. **Add it to the dialog:** each template is one entry in
+   `CONFIG.products`: `{ id, material, width, height, productId, imageParam }`,
+   plus `wrap` for a canvas. `id` is a short unique name, used in file names
+   and telemetry. `material` is the name the dialog shows (`'Poster'`,
+   `'Canvas'`, `'Metal'`, …). `width` and `height` are the template's
+   placeholder in inches; the dialog shows only the shape they make
+   (Portrait, Landscape or Square, and the ratio), since buyers choose the
+   size on Zazzle. The dialog groups products by `material`, in the order
+   each first appears, and lists a material's shapes in order, each with a
+   thumbnail. So a new shape, or a whole new material, is one new entry.
+   Sizes on Zazzle with another ratio (16×20 is 4:5, but 18×24 is 3:4) crop
+   and stretch, so each ratio needs its own template. Every print file fills
+   the 16 megapixel cap (`maxPixels`) whatever its shape, so it stays as
+   sharp as it can at the bigger sizes buyers can pick: about 96 ppi at
+   36×48 in. A canvas's `wrap` is fixed in inches, so it fits the frame
+   depth of the template's own size.
+7. **Test:** generate a link and compare it with Zazzle's
    [link builder](https://www.zazzle.com/my/associate/create) (Create a
    Template Link).
 

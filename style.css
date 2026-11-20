@@ -1039,6 +1039,94 @@ html[data-image="loading"] #source {
     font-variant-numeric: tabular-nums;
 }
 
+/* Material cards are print cards; their thumbnail follows the chosen size. */
+.print-choice {
+    display: grid;
+    gap: 8px;
+}
+
+.print-choice-label {
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.print-art {
+    position: relative;
+    display: block;
+}
+
+/* A canvas wraps round a frame: suggest its depth with a shaded edge. */
+.print-material[data-material="canvas"] .print-art::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: 3px;
+    box-shadow: inset 0 0 0 3px rgba(0, 0, 0, 0.22), inset 0 0 0 4px rgba(255, 255, 255, 0.12);
+    pointer-events: none;
+}
+
+.print-material[data-material="canvas"] .print-thumb {
+    box-shadow: 2px 3px 0 rgba(0, 0, 0, 0.2), 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.print-sizes {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+    gap: 8px;
+}
+
+.print-shape-option {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 10px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--panel-2);
+    cursor: pointer;
+    transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.print-shape-option:hover {
+    border-color: var(--border-strong);
+}
+
+.print-shape-option input {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+}
+
+.print-shape-option:has(input:checked) {
+    border-color: var(--accent);
+    box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+.print-shape-option:has(input:focus-visible) {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+}
+
+.print-shape-frame {
+    display: grid;
+    flex: none;
+    place-items: center;
+    width: 36px;
+    height: 36px;
+}
+
+.print-shape-frame .print-thumb {
+    border-radius: 2px;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+}
+
+.print-shape-text {
+    display: grid;
+    gap: 1px;
+}
+
 .print-disclosure {
     margin: -6px 0 0;
     color: var(--muted);
