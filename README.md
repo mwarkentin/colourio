@@ -116,8 +116,8 @@ up to date), and deletes it when the pull request closes.
   static assets, the same way the games site does its previews. It's never
   deployed to production, and `wrangler preview` makes it on first use, so
   nothing about it lives in mwarkentin/infra.
-- **What's in it:** every top-level `.html`, `.js`, `.css`, `.jpg` and
-  `.jpeg` file plus `samples/`, matched by pattern rather than by
+- **What's in it:** every top-level `.html`, `.js`, `.css`, `.jpg`,
+  `.jpeg`, `.png`, `.svg` and `.webmanifest` file plus `samples/`, matched by pattern rather than by
   `pages.yml`'s list, so new files appear without being added anywhere.
   `preview/mark.py` then points the link-preview tags at the preview, starts
   the title with "PR <number> · ", marks the page `noindex`, and adds a strip
@@ -140,6 +140,16 @@ a title, description and `og-image.jpg` (1200×630) in Slack, iMessage,
 Bluesky, Mastodon, Threads, Reddit and Pinterest. The image is the Cosmic
 Cliffs sample beside the stripes from one of its rows. `og:url` and
 `og:image` must be absolute (see [Address](#address)).
+
+### Home screen
+
+`manifest.webmanifest` lets people add colourio to their home screen on
+Android and iOS, where it opens without the browser's address bar. Its icons
+are drawn from `icon.svg`, the favicon's stripes: `icon-192.png`,
+`icon-512.png`, a maskable `icon-maskable-512.png` with the stripes inside
+the safe zone, and `apple-touch-icon.png` for iOS. If the stripes change,
+redraw the PNGs from the SVG and add any new file to `pages.yml`. There's no
+service worker, so the app still needs a connection.
 
 ## Sharing
 
