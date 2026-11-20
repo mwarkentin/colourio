@@ -6,9 +6,8 @@ print files. **Order a print** uploads the print PNG here, then gives Zazzle
 the file's URL, and Zazzle fetches it for the product page and the RealView
 mockup.
 
-It's one of the two upload hosts `print.js` can use; the other is Cloudinary.
-Pick one with `hosting.provider` in `print.js` (see the main README's
-**Prints** section).
+`print.js` sends uploads to the address in its `printsUrl` setting (see the
+main README's **Prints** section).
 
 ## API
 
@@ -104,11 +103,10 @@ the custom domain infra manages.
 
    It answers with the file's URL; open it to see the image.
 5. **Declare the domain on Zazzle:** add `prints.michaelwarkentin.com` on the
-   [domains page](https://www.zazzle.com/my/ambassador/domains), with the
-   same ownership option as `res.cloudinary.com`. Zazzle shows a placeholder
-   instead of images from undeclared domains.
+   [domains page](https://www.zazzle.com/my/ambassador/domains). Zazzle shows
+   a placeholder instead of images from undeclared domains.
 
-`print.js` already points `hosting.worker.url` at
+`print.js` already points `printsUrl` at
 `https://prints.michaelwarkentin.com`, so print files get URLs on that host.
 The `workers.dev` address still answers, but nothing hands it out, so it
 doesn't need declaring on Zazzle.
@@ -121,7 +119,7 @@ npx wrangler@4.151.0 dev --port 8787
 ```
 
 `wrangler dev` uses a local R2 bucket in `.wrangler/`. To try it with
-colourio, set `hosting.worker.url` to `http://localhost:8787` (with a
+colourio, set `printsUrl` to `http://localhost:8787` (with a
 `zazzle.memberId` and a product's `productId`, so the dialog goes live), and
 serve the site with `python3 -m http.server 8000` from the repo root. Zazzle
 can't fetch files from your computer, so the RealView mockup stays hidden.

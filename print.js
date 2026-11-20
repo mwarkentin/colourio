@@ -23,22 +23,10 @@
             domain: 'zazzle.com'
         },
         // Zazzle fetches the print file from a public URL, so it's uploaded
-        // first. Declare the host's domain on Zazzle's domains page.
-        hosting: {
-            // Which host below to use: 'worker' or 'cloudinary'.
-            provider: 'worker',
-            // colourio's Cloudflare Worker, which keeps files in R2 (see
-            // worker/README.md). Its URL: its custom domain, or its
-            // workers.dev address.
-            worker: {
-                url: 'https://prints.michaelwarkentin.com'
-            },
-            // Cloudinary, using an *unsigned* upload preset.
-            cloudinary: {
-                cloudName: '',
-                uploadPreset: ''
-            }
-        },
+        // first to colourio's Cloudflare Worker, which keeps files in R2 (see
+        // worker/README.md). Its domain must be declared on Zazzle's domains
+        // page. While this is empty, the dialog stays in demo mode.
+        printsUrl: 'https://prints.michaelwarkentin.com',
         // Print resolution, capped so large prints stay within the canvas
         // size limits of mobile browsers. Zazzle asks for at least 100 ppi
         // for posters and prints.
@@ -79,18 +67,10 @@
     var selected = CONFIG.products[0];
     var T = window.colourio.telemetry;
 
-    var HOSTING = CONFIG.hosting;
-    var host = HOSTING.provider;
-    var workerUrl = HOSTING.worker.url.replace(/\/+$/, '');
-
-    var hostReady = function () {
-        if (host === 'worker') { return !!workerUrl; }
-        if (host === 'cloudinary') { return !!(HOSTING.cloudinary.cloudName && HOSTING.cloudinary.uploadPreset); }
-        return false;
-    };
+    var printsUrl = CONFIG.printsUrl.replace(/\/+$/, '');
 
     var isLive = function (product) {
-        return !!(CONFIG.zazzle.memberId && hostReady() && product.productId);
+        return !!(CONFIG.zazzle.memberId && printsUrl && product.productId);
     };
 
     var printSize = function (product) {
@@ -139,28 +119,17 @@
     };
 
     // Uploads the print file and resolves with its public URL. The Worker
-    // answers {url} or {error: "..."}; Cloudinary answers {secure_url} or
-    // {error: {message}}.
-    var upload = function (blob, filename) {
-        var request;
-        if (host === 'worker') {
-            request = fetch(workerUrl + '/v1/prints', {
-                method: 'POST',
-                headers: { 'Content-Type': 'image/png' },
-                body: blob
-            });
-        } else {
-            var form = new FormData();
-            form.append('file', blob, filename);
-            form.append('upload_preset', HOSTING.cloudinary.uploadPreset);
-            request = fetch('https://api.cloudinary.com/v1_1/' + encodeURIComponent(HOSTING.cloudinary.cloudName) +
-                '/image/upload', { method: 'POST', body: form });
-        }
-        return request.then(function (res) {
+    // answers {url} or {error: "..."}.
+    var upload = function (blob) {
+        return fetch(printsUrl + '/v1/prints', {
+            method: 'POST',
+            headers: { 'Content-Type': 'image/png' },
+            body: blob
+        }).then(function (res) {
             return res.json().catch(function () { return {}; }).then(function (body) {
-                var imageUrl = host === 'worker' ? body.url : body.secure_url;
+                var imageUrl = body.url;
                 if (!res.ok || !imageUrl) {
-                    var message = typeof body.error === 'string' ? body.error : body.error && body.error.message;
+                    var message = typeof body.error === 'string' ? body.error : '';
                     var error = new Error(message || 'HTTP ' + res.status);
                     error.status = res.status;
                     throw error;
@@ -171,12 +140,8 @@
     };
 
     // What an uploaded file's URL looks like, for the demo link.
-    var exampleImageUrl = function (filename) {
-        if (host === 'cloudinary') {
-            return 'https://res.cloudinary.com/' + (HOSTING.cloudinary.cloudName || 'YOUR_CLOUD') + '/image/upload/' + filename;
-        }
-        return (workerUrl || 'https://colourio-prints.YOUR_SUBDOMAIN.workers.dev') +
-            '/v1/prints/00000000-0000-0000-0000-000000000000.png';
+    var exampleImageUrl = function () {
+        return (printsUrl || 'https://prints.example.com') + '/v1/prints/00000000-0000-0000-0000-000000000000.png';
     };
 
     // ======================================================================
@@ -238,7 +203,7 @@
         } else if (status === 'demoReady') {
             setStatus('Print file ready · ' + size.width + ' × ' + size.height + ' px (' + size.ppi +
                 ' ppi) · ' + formatBytes(file.blob.size), 'done');
-            els.linkText.textContent = zazzleUrl(file.product, exampleImageUrl(file.filename), imageCode(file.filename));
+            els.linkText.textContent = zazzleUrl(file.product, exampleImageUrl(), imageCode(file.filename));
         } else if (status === 'uploading') {
             setStatus('Uploading print file…', 'busy');
         } else if (status === 'uploadFailed') {
@@ -291,16 +256,16 @@
         var guard = flow.guard();
         var product = file.product;
         var filename = file.filename;
-        var timer = T.timer('print.upload', { product: product.id, upload_host: host });
-        upload(file.blob, filename).then(function (imageUrl) {
+        var timer = T.timer('print.upload', { product: product.id });
+        upload(file.blob).then(function (imageUrl) {
             timer.end({ ok: true });
-            T.count('print.uploaded', { product: product.id, upload_host: host });
+            T.count('print.uploaded', { product: product.id });
             guard.send('UPLOADED', { imageUrl: imageUrl, link: zazzleUrl(product, imageUrl, imageCode(filename)) });
         }, function (error) {
             timer.end({ ok: false });
-            // The host's message isn't forwarded; the status says enough.
-            T.error(new Error('Print file upload failed'), { product: product.id, upload_host: host, status: error.status || 'network' });
-            T.count('print.upload_failed', { product: product.id, upload_host: host });
+            // The Worker's message isn't forwarded; the status says enough.
+            T.error(new Error('Print file upload failed'), { product: product.id, status: error.status || 'network' });
+            T.count('print.upload_failed', { product: product.id });
             guard.send('UPLOAD_FAILED', { message: error.message });
         });
     };
