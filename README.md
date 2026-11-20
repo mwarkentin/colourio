@@ -333,7 +333,10 @@ Zazzle's [Create-a-Product API guide](https://www.zazzle.com/api) and fill in
    **Fill**. Choose **Done → Sell It** and set **Make product a template** to
    Yes. Copy the 18-digit number at the end of the product's URL into
    `productId`. Templates can't be edited once posted, so test one before making
-   the rest.
+   the rest. A canvas's design area includes the part that wraps round the
+   frame, so give its product a `wrap` (in inches): colourio then adds that
+   much on every side, mirrored from the stripes, so the whole design shows on
+   the front. Check it in RealView with a test image that has a border.
 5. **Image hosting:** Zazzle fetches the image from a public URL, so
    colourio first uploads it to its own Cloudflare Worker, which keeps files
    in R2. It checks every upload, limits uploads per visitor and deletes

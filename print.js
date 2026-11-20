@@ -35,11 +35,16 @@
         // One entry per Zazzle product template. `productId` is the
         // template's 18-digit product ID and `imageParam` the URL parameter
         // name of its image object (Zazzle's default is "image1"). Sizes in
-        // inches; match the template's image placeholder.
+        // inches; match the template's image placeholder. `wrap` is the
+        // margin in inches that a canvas folds round its frame: the file gets
+        // that much extra on every side, mirrored from the stripes, so the
+        // whole width × height shows on the front.
         products: [
             { id: 'poster-portrait', name: 'Poster', width: 18, height: 24, productId: '256932064593255212', imageParam: 'image1' },
             { id: 'poster-landscape', name: 'Poster', width: 24, height: 18, productId: '256970220779415887', imageParam: 'image1' },
-            { id: 'canvas', name: 'Canvas print', width: 16, height: 20, productId: '', imageParam: 'image1' },
+            // RealView puts the front edge about 1.75 in from the file's
+            // edge: the 1.25 in frame depth plus the fold to the back.
+            { id: 'canvas', name: 'Canvas print', width: 16, height: 20, wrap: 1.75, productId: '256192989000270834', imageParam: 'image1' },
             { id: 'square', name: 'Poster', width: 12, height: 12, productId: '256382642826496595', imageParam: 'image1' }
         ]
     };
@@ -73,13 +78,42 @@
         return !!(CONFIG.zazzle.memberId && printsUrl && product.productId);
     };
 
+    // The whole file's size in pixels; `wrap` is the mirrored margin on each
+    // side (0 for posters).
     var printSize = function (product) {
-        var ppi = Math.min(CONFIG.ppi, Math.sqrt(CONFIG.maxPixels / (product.width * product.height)));
+        var margin = product.wrap || 0;
+        var width = product.width + 2 * margin;
+        var height = product.height + 2 * margin;
+        var ppi = Math.min(CONFIG.ppi, Math.sqrt(CONFIG.maxPixels / (width * height)));
+        var wrap = Math.round(margin * ppi);
         return {
-            width: Math.round(product.width * ppi),
-            height: Math.round(product.height * ppi),
+            width: Math.round(product.width * ppi) + 2 * wrap,
+            height: Math.round(product.height * ppi) + 2 * wrap,
+            wrap: wrap,
             ppi: Math.floor(ppi)
         };
+    };
+
+    // Puts `front` in the middle of a canvas `wrap` px bigger on every side,
+    // and fills the margins with mirror images of it, so the stripes carry on
+    // round a canvas's edges.
+    var mirrorWrap = function (front, wrap) {
+        var w = front.width;
+        var h = front.height;
+        var out = document.createElement('canvas');
+        out.width = w + 2 * wrap;
+        out.height = h + 2 * wrap;
+        var ctx = out.getContext('2d');
+        [-1, 0, 1].forEach(function (col) {
+            [-1, 0, 1].forEach(function (row) {
+                ctx.save();
+                ctx.translate(wrap + col * w + (col ? w : 0), wrap + row * h + (row ? h : 0));
+                ctx.scale(col ? -1 : 1, row ? -1 : 1);
+                ctx.drawImage(front, 0, 0);
+                ctx.restore();
+            });
+        });
+        return out;
     };
 
     var formatBytes = function (bytes) {
@@ -232,7 +266,8 @@
             setTimeout(function () {
                 // Picked another product or closed the dialog meanwhile.
                 if (!guard.active()) { return; }
-                var canvas = window.colourio.render(size.width, size.height);
+                var canvas = window.colourio.render(size.width - 2 * size.wrap, size.height - 2 * size.wrap);
+                if (canvas && size.wrap) { canvas = mirrorWrap(canvas, size.wrap); }
                 canvas.toBlob(function (blob) {
                     timer.end({ ok: !!blob });
                     if (!blob) {
