@@ -214,6 +214,66 @@ describe('colourio in a browser', { skip: !playwright && !process.env.CI && 'Pla
     await route.fulfill({ contentType: 'text/javascript', body: source });
   });
 
+  // The dialog's choices, by material id or product id.
+  const material = (id) => `#printMaterials label:has(input[value="${id}"])`;
+  const size = (id) => `#printSizes label:has(input[value="${id}"])`;
+  const sizes = (page) => page.$$eval('#printSizes input', (inputs) => inputs.map((i) => i.value));
+  const checked = (page, group) => page.$eval(`${group} input:checked`, (i) => i.value);
+
+  test('print dialog groups products by material, then size', async (t) => {
+    const page = await open(t);
+    await page.click('#printBtn');
+    await page.waitForSelector('html[data-print="choosing"]');
+    assert.deepEqual(await page.$$eval('#printMaterials .print-name', (els) => els.map((e) => e.textContent)), ['Poster', 'Canvas']);
+    assert.deepEqual(await page.$$eval('#printMaterials .print-size', (els) => els.map((e) => e.textContent)), ['3 sizes', '16 × 20 in']);
+    assert.deepEqual(await sizes(page), ['poster-portrait', 'poster-landscape', 'square']);
+    assert.deepEqual(await page.$$eval('#printSizes label', (els) => els.map((e) => e.textContent)),
+      ['18 × 24 inPortrait', '24 × 18 inLandscape', '12 × 12 inSquare']);
+    assert.equal(await checked(page, '#printSizes'), 'poster-portrait');
+
+    // Each size's thumbnail has its shape.
+    const shapes = await page.$$eval('#printSizes .print-thumb', (els) => els.map((e) => [e.offsetWidth, e.offsetHeight]));
+    assert.deepEqual(shapes, [[24, 32], [32, 24], [32, 32]]);
+
+    // Switching material shows its sizes, and switching back keeps the size picked before.
+    await page.click(size('square'));
+    await page.click(material('canvas'));
+    assert.deepEqual(await sizes(page), ['canvas']);
+    assert.equal(await checked(page, '#printSizes'), 'canvas');
+    await page.click(material('poster'));
+    assert.equal(await checked(page, '#printSizes'), 'square');
+    // The material card's thumbnail follows its size.
+    const thumb = await page.$eval('#printMaterials label:has(input[value="poster"]) .print-thumb', (e) => [e.offsetWidth, e.offsetHeight]);
+    assert.deepEqual(thumb, [80, 80]);
+
+    // Arrow keys move through each group.
+    await page.focus('#printSizes input:checked');
+    await page.keyboard.press('ArrowLeft');
+    assert.equal(await checked(page, '#printSizes'), 'poster-landscape');
+    await page.focus('#printMaterials input:checked');
+    await page.keyboard.press('ArrowRight');
+    assert.equal(await checked(page, '#printMaterials'), 'canvas');
+    assert.deepEqual(await sizes(page), ['canvas']);
+    await page.waitForSelector('html[data-print="choosing"]');
+  });
+
+  // Products are grouped by their `material`, so a new one is a single entry.
+  test('print dialog shows a new material from one product entry', async (t) => {
+    const page = await open(t, configure([[
+      /products: \[/,
+      "products: [{ id: 'metal-square', material: 'Metal', width: 12, height: 12, productId: '' },",
+    ]]));
+    await page.click('#printBtn');
+    assert.equal(await checked(page, '#printMaterials'), 'metal');
+    assert.equal(await page.isVisible('#printDemo'), true);
+    await page.click(material('canvas'));
+    assert.equal(await page.isVisible('#printDemo'), false);
+    await page.click(material('metal'));
+    await page.click('#printGoBtn');
+    await page.waitForSelector('html[data-print="demoReady"]', { timeout: 30000 });
+    assert.match(await page.getAttribute('#printDownload', 'download'), /-metal-square\.png$/);
+  });
+
   // Demo mode: no product has a Zazzle template, so nothing is uploaded.
   test('print dialog in demo mode makes a file and an example link', async (t) => {
     const page = await open(t, configure([[/productId: '\d+'/g, "productId: ''"]]));
@@ -233,7 +293,7 @@ describe('colourio in a browser', { skip: !playwright && !process.env.CI && 'Pla
   test('print file for the canvas has mirrored edges', async (t) => {
     const page = await open(t, configure([[/productId: '\d+'/g, "productId: ''"]]));
     await page.click('#printBtn');
-    await page.click('#printProducts label >> nth=2');
+    await page.click(material('canvas'));
     await page.click('#printGoBtn');
     await page.waitForSelector('html[data-print="demoReady"]', { timeout: 30000 });
     const result = await page.evaluate(async () => {
@@ -274,13 +334,28 @@ describe('colourio in a browser', { skip: !playwright && !process.env.CI && 'Pla
     await page.click('#printBtn');
     await page.click('#printGoBtn');
     await page.waitForSelector('html[data-print="uploading"]', { timeout: 30000 });
-    await page.click('#printProducts label >> nth=1');
+    await page.click(size('poster-landscape'));
     await page.waitForSelector('html[data-print="choosing"]');
     await delay(1200); // past the upload
     assert.equal(await page.getAttribute('html', 'data-print'), 'choosing');
     assert.equal(await page.isVisible('#printOpen'), false);
     assert.equal(await page.isVisible('#printGoBtn'), true);
     assert.equal(await page.textContent('#printStatus'), '');
+  });
+
+  test('print upload: switching material drops the upload under way', async (t) => {
+    const page = await open(t, live(async (route) => {
+      await delay(800);
+      await route.fulfill({ status: 201, contentType: 'application/json', body: '{"url":"https://prints.test/v1/prints/a.png"}' });
+    }));
+    await page.click('#printBtn');
+    await page.click('#printGoBtn');
+    await page.waitForSelector('html[data-print="uploading"]', { timeout: 30000 });
+    await page.click(material('canvas'));
+    await page.waitForSelector('html[data-print="choosing"]');
+    await delay(1200); // past the upload
+    assert.equal(await page.getAttribute('html', 'data-print'), 'choosing');
+    assert.equal(await page.isVisible('#printOpen'), false);
   });
 
   test('print upload: success links to Zazzle', async (t) => {

@@ -252,8 +252,15 @@
                         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
                     </button>
                 </div>
-                <p class="dialog-intro">Pick a product. Zazzle prints and ships it; you’ll review it and check out on zazzle.com.</p>
-                <div class="print-products" id="printProducts" role="radiogroup" aria-label="Product"></div>
+                <p class="dialog-intro">Pick a material and a size. Zazzle prints and ships it; you’ll review it and check out on zazzle.com.</p>
+                <div class="print-choice">
+                    <span class="print-choice-label" id="printMaterialsLabel">Material</span>
+                    <div class="print-products print-materials" id="printMaterials" role="radiogroup" aria-labelledby="printMaterialsLabel"></div>
+                </div>
+                <div class="print-choice">
+                    <span class="print-choice-label" id="printSizesLabel">Size</span>
+                    <div class="print-sizes" id="printSizes" role="radiogroup" aria-labelledby="printSizesLabel"></div>
+                </div>
                 <div class="print-demo" id="printDemo" hidden>
                     <strong>Demo mode.</strong> Zazzle and image hosting aren’t set up yet, so nothing is uploaded. You can download the print file and see the Zazzle link that would open.
                 </div>
