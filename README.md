@@ -203,8 +203,7 @@ so it's safe to call anywhere. What it records:
 
 - **Print funnel:** dialog opened, print file created or failed, uploaded or
   failed, and Zazzle opened, by product, plus print file size and how long
-  rendering and uploading take. Uploads are also tagged with `upload_host`
-  (`worker` or `cloudinary`). Upload and print-file failures are sent as
+  rendering and uploading take. Upload and print-file failures are sent as
   errors.
 - **Images:** where each image came from (`default`, `gallery`, `surprise`,
   `file_picker`, `drop`, `paste`, `share_link`), its size in megapixels, and
@@ -323,10 +322,10 @@ Zazzle's [Create-a-Product API guide](https://www.zazzle.com/api) and fill in
    Put your member account ID in `zazzle.memberId` (an 18-digit number).
 2. **Keep links self-promotional:** leave `zazzle.ambassadorId` and
    `zazzle.trackingCode` blank. See [Commission](#commission) below.
-3. **Declare the image domain** of your upload host (step 5) on the
+3. **Declare the image domain** (step 5) on the
    [domains page](https://www.zazzle.com/my/ambassador/domains): the Worker's
-   domain, `prints.michaelwarkentin.com`, or `res.cloudinary.com`. Zazzle
-   refuses images from undeclared domains.
+   domain, `prints.michaelwarkentin.com`. Zazzle refuses images from
+   undeclared domains.
 4. **Store and templates:** [create a store](https://www.zazzle.com/my/store/create),
    then for each product make a design with an image placeholder the same shape
    as the product. Turn on **Make this a template object**, note its **URL
@@ -336,21 +335,16 @@ Zazzle's [Create-a-Product API guide](https://www.zazzle.com/api) and fill in
    `productId`. Templates can't be edited once posted, so test one before making
    the rest.
 5. **Image hosting:** Zazzle fetches the image from a public URL, so
-   colourio uploads it first. Set `hosting.provider` to the host you use:
-   - `'worker'`: colourio's own Cloudflare Worker, which keeps files in R2.
-     It checks every upload, limits uploads per visitor and deletes files
-     after a year. Its bucket, expiry rule and deploy token are managed in
-     [mwarkentin/infra](https://github.com/mwarkentin/infra) (`colourio.tf`),
-     and this repo's **Prints worker** workflow deploys it; see
-     [worker/README.md](worker/README.md). It answers at its custom domain,
-     `https://prints.michaelwarkentin.com` (managed in infra's
-     `worker_domains.tf`), which is set in `hosting.worker.url`. Its
-     `workers.dev` address still answers too.
-   - `'cloudinary'`: create a Cloudinary account, add an **unsigned** upload
-     preset (Settings → Upload), and set `hosting.cloudinary.cloudName` and
-     `hosting.cloudinary.uploadPreset`. Anyone who reads the page source can
-     use an unsigned preset, so restrict it to PNGs, a size limit and a
-     folder.
+   colourio first uploads it to its own Cloudflare Worker, which keeps files
+   in R2. It checks every upload, limits uploads per visitor and deletes
+   files after a year. Its bucket, expiry rule and deploy token are managed
+   in [mwarkentin/infra](https://github.com/mwarkentin/infra)
+   (`colourio.tf`), and this repo's **Prints worker** workflow deploys it;
+   see [worker/README.md](worker/README.md). It answers at its custom
+   domain, `https://prints.michaelwarkentin.com` (managed in infra's
+   `worker_domains.tf`), which is set in `printsUrl`. Its `workers.dev`
+   address still answers too. While `printsUrl` is empty, the dialog stays
+   in demo mode.
 6. **Test:** generate a link and compare it with Zazzle's
    [link builder](https://www.zazzle.com/my/associate/create) (Create a
    Template Link).

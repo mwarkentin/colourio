@@ -234,7 +234,7 @@ describe('colourio in a browser', { skip: !playwright && !process.env.CI && 'Pla
   const live = (upload) => async (page) => {
     await configure([
       [/memberId: '[^']*'/, "memberId: '238000000000000000'"],
-      [/(worker: \{\s*url: )'[^']*'/, "$1'https://prints.test'"],
+      [/printsUrl: '[^']*'/, "printsUrl: 'https://prints.test'"],
       [/productId: '[^']*'/g, "productId: '256000000000000000'"],
     ])(page);
     await page.route('https://prints.test/**', upload);
