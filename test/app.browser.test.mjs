@@ -229,6 +229,31 @@ describe('colourio in a browser', { skip: !playwright && !process.env.CI && 'Pla
     await page.waitForSelector('html[data-print="closed"]');
   });
 
+  // The canvas wraps round its frame, so its file has mirrored margins.
+  test('print file for the canvas has mirrored edges', async (t) => {
+    const page = await open(t, configure([[/productId: '\d+'/g, "productId: ''"]]));
+    await page.click('#printBtn');
+    await page.click('#printProducts label >> nth=2');
+    await page.click('#printGoBtn');
+    await page.waitForSelector('html[data-print="demoReady"]', { timeout: 30000 });
+    const result = await page.evaluate(async () => {
+      const blob = await (await fetch(document.getElementById('printDownload').href)).blob();
+      const bitmap = await createImageBitmap(blob);
+      const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(bitmap, 0, 0);
+      const wrap = Math.round(1.75 * 150);
+      const px = (x, y) => Array.from(ctx.getImageData(x, y, 1, 1).data);
+      const y = Math.round(bitmap.height / 2);
+      const mirrored = [1, 10, 100, wrap - 1].every((d) =>
+        px(wrap - 1 - d + 1, y).join() === px(wrap + d - 1, y).join() &&
+        px(bitmap.width - wrap + d - 1, y).join() === px(bitmap.width - wrap - d, y).join());
+      return { width: bitmap.width, height: bitmap.height, mirrored };
+    });
+    // 16 × 20 in at 150 ppi, plus 263 px (1.75 in) on each side.
+    assert.deepEqual(result, { width: 2926, height: 3526, mirrored: true });
+  });
+
   // Live mode: every product has a template, and the upload host is faked
   // (whatever print.js points at, uploads go to prints.test).
   const live = (upload) => async (page) => {
