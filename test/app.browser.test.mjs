@@ -216,44 +216,44 @@ describe('colourio in a browser', { skip: !playwright && !process.env.CI && 'Pla
 
   // The dialog's choices, by material id or product id.
   const material = (id) => `#printMaterials label:has(input[value="${id}"])`;
-  const size = (id) => `#printSizes label:has(input[value="${id}"])`;
-  const sizes = (page) => page.$$eval('#printSizes input', (inputs) => inputs.map((i) => i.value));
+  const shape = (id) => `#printShapes label:has(input[value="${id}"])`;
+  const shapes = (page) => page.$$eval('#printShapes input', (inputs) => inputs.map((i) => i.value));
   const checked = (page, group) => page.$eval(`${group} input:checked`, (i) => i.value);
 
-  test('print dialog groups products by material, then size', async (t) => {
+  test('print dialog groups products by material, then shape', async (t) => {
     const page = await open(t);
     await page.click('#printBtn');
     await page.waitForSelector('html[data-print="choosing"]');
     assert.deepEqual(await page.$$eval('#printMaterials .print-name', (els) => els.map((e) => e.textContent)), ['Poster', 'Canvas']);
-    assert.deepEqual(await page.$$eval('#printMaterials .print-size', (els) => els.map((e) => e.textContent)), ['3 sizes', '16 × 20 in']);
-    assert.deepEqual(await sizes(page), ['poster-portrait', 'poster-landscape', 'square']);
-    assert.deepEqual(await page.$$eval('#printSizes label', (els) => els.map((e) => e.textContent)),
-      ['18 × 24 inPortrait', '24 × 18 inLandscape', '12 × 12 inSquare']);
-    assert.equal(await checked(page, '#printSizes'), 'poster-portrait');
+    assert.deepEqual(await page.$$eval('#printMaterials .print-size', (els) => els.map((e) => e.textContent)), ['3 shapes', 'Portrait · 4:5']);
+    assert.deepEqual(await shapes(page), ['poster-portrait', 'poster-landscape', 'square']);
+    assert.deepEqual(await page.$$eval('#printShapes label', (els) => els.map((e) => e.textContent)),
+      ['Portrait3:4', 'Landscape4:3', 'Square1:1']);
+    assert.equal(await checked(page, '#printShapes'), 'poster-portrait');
 
-    // Each size's thumbnail has its shape.
-    const shapes = await page.$$eval('#printSizes .print-thumb', (els) => els.map((e) => [e.offsetWidth, e.offsetHeight]));
-    assert.deepEqual(shapes, [[24, 32], [32, 24], [32, 32]]);
+    // Each option's thumbnail has its shape.
+    const thumbs = await page.$$eval('#printShapes .print-thumb', (els) => els.map((e) => [e.offsetWidth, e.offsetHeight]));
+    assert.deepEqual(thumbs, [[24, 32], [32, 24], [32, 32]]);
 
-    // Switching material shows its sizes, and switching back keeps the size picked before.
-    await page.click(size('square'));
+    // Switching material shows its shapes, and switching back keeps the shape picked before.
+    await page.click(shape('square'));
     await page.click(material('canvas'));
-    assert.deepEqual(await sizes(page), ['canvas']);
-    assert.equal(await checked(page, '#printSizes'), 'canvas');
+    assert.deepEqual(await shapes(page), ['canvas']);
+    assert.equal(await checked(page, '#printShapes'), 'canvas');
     await page.click(material('poster'));
-    assert.equal(await checked(page, '#printSizes'), 'square');
-    // The material card's thumbnail follows its size.
+    assert.equal(await checked(page, '#printShapes'), 'square');
+    // The material card's thumbnail follows its shape.
     const thumb = await page.$eval('#printMaterials label:has(input[value="poster"]) .print-thumb', (e) => [e.offsetWidth, e.offsetHeight]);
     assert.deepEqual(thumb, [80, 80]);
 
     // Arrow keys move through each group.
-    await page.focus('#printSizes input:checked');
+    await page.focus('#printShapes input:checked');
     await page.keyboard.press('ArrowLeft');
-    assert.equal(await checked(page, '#printSizes'), 'poster-landscape');
+    assert.equal(await checked(page, '#printShapes'), 'poster-landscape');
     await page.focus('#printMaterials input:checked');
     await page.keyboard.press('ArrowRight');
     assert.equal(await checked(page, '#printMaterials'), 'canvas');
-    assert.deepEqual(await sizes(page), ['canvas']);
+    assert.deepEqual(await shapes(page), ['canvas']);
     await page.waitForSelector('html[data-print="choosing"]');
   });
 
@@ -285,6 +285,8 @@ describe('colourio in a browser', { skip: !playwright && !process.env.CI && 'Pla
     assert.equal(await page.isVisible('#printDownload'), true);
     assert.equal(await page.isVisible('#printGoBtn'), false);
     assert.match(await page.textContent('#printLinkText'), /^https:\/\/www\.zazzle\.com\/api\/create\/at-[^?]+\?.*pd=YOUR_PRODUCT_ID/);
+    // Every file fills the pixel cap, so it stays sharp at bigger sizes on Zazzle.
+    assert.match(await page.textContent('#printStatus'), /^Print file ready · 3464 × 4619 px \(192 ppi at 18 × 24 in\) · /);
     await page.keyboard.press('Escape');
     await page.waitForSelector('html[data-print="closed"]');
   });
@@ -302,7 +304,7 @@ describe('colourio in a browser', { skip: !playwright && !process.env.CI && 'Pla
       const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
       const ctx = canvas.getContext('2d');
       ctx.drawImage(bitmap, 0, 0);
-      const wrap = Math.round(1.75 * 150);
+      const wrap = 327; // 1.75 in
       const px = (x, y) => Array.from(ctx.getImageData(x, y, 1, 1).data);
       const y = Math.round(bitmap.height / 2);
       const mirrored = [1, 10, 100, wrap - 1].every((d) =>
@@ -310,8 +312,8 @@ describe('colourio in a browser', { skip: !playwright && !process.env.CI && 'Pla
         px(bitmap.width - wrap + d - 1, y).join() === px(bitmap.width - wrap - d, y).join());
       return { width: bitmap.width, height: bitmap.height, mirrored };
     });
-    // 16 × 20 in at 150 ppi, plus 263 px (1.75 in) on each side.
-    assert.deepEqual(result, { width: 2926, height: 3526, mirrored: true });
+    // 16 × 20 in plus 1.75 in on each side, at the 16 megapixel cap (186 ppi).
+    assert.deepEqual(result, { width: 3644, height: 4391, mirrored: true });
   });
 
   // Live mode: every product has a template, and the upload host is faked
@@ -334,7 +336,7 @@ describe('colourio in a browser', { skip: !playwright && !process.env.CI && 'Pla
     await page.click('#printBtn');
     await page.click('#printGoBtn');
     await page.waitForSelector('html[data-print="uploading"]', { timeout: 30000 });
-    await page.click(size('poster-landscape'));
+    await page.click(shape('poster-landscape'));
     await page.waitForSelector('html[data-print="choosing"]');
     await delay(1200); // past the upload
     assert.equal(await page.getAttribute('html', 'data-print'), 'choosing');
