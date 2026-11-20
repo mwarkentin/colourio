@@ -40,7 +40,7 @@
             { id: 'poster-portrait', name: 'Poster', width: 18, height: 24, productId: '256932064593255212', imageParam: 'image1' },
             { id: 'poster-landscape', name: 'Poster', width: 24, height: 18, productId: '256970220779415887', imageParam: 'image1' },
             { id: 'canvas', name: 'Canvas print', width: 16, height: 20, productId: '', imageParam: 'image1' },
-            { id: 'square', name: 'Square print', width: 12, height: 12, productId: '', imageParam: 'image1' }
+            { id: 'square', name: 'Poster', width: 12, height: 12, productId: '256382642826496595', imageParam: 'image1' }
         ]
     };
 
