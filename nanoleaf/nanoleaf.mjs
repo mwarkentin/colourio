@@ -1,42 +1,93 @@
 #!/usr/bin/env node
 // Sends a colourio gradient to Nanoleaf lights, such as a Skylight, over
-// your home network. See README.md.
+// your home network, and keeps a library of scenes on this computer. See
+// README.md.
 //
 //   node nanoleaf/nanoleaf.mjs pair <ip>      once, after Connect to API in the app
-//   node nanoleaf/nanoleaf.mjs send [colours] [--drift] [--cycle 60] [--reverse] [--save NAME]
+//   node nanoleaf/nanoleaf.mjs send [colours] [--drift] [--cycle 60] [--reverse] [--keep NAME | --save NAME]
+//   node nanoleaf/nanoleaf.mjs scenes         list the scenes you've kept
+//   node nanoleaf/nanoleaf.mjs play NAME [--save]
+//   node nanoleaf/nanoleaf.mjs sync           save every kept scene on the lights
+//   node nanoleaf/nanoleaf.mjs forget NAME
 //   node nanoleaf/nanoleaf.mjs layout         list the panels in gradient order
 
 import { execFileSync } from 'node:child_process';
-import { chmodSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { dirname, join, sep } from 'node:path';
 import { parseArgs } from 'node:util';
 
 import {
-  buildEffect, DRIFT_STEPS, driftFrames, getInfo, getLayout, gradientColours, pair, panelSlices, parseGradient, sendEffect,
-  stillColours, toHex,
+  colourDepth, DRIFT_STEPS, getInfo, getLayout, gradientColours, pair, paint, panelSlices, parseGradient, sceneEffect,
+  sendEffect, toHex, writeEffect,
 } from './lib.mjs';
+import {
+  checkName, CYCLE_MAX, CYCLE_MIN, findScene, forgetScene, keepScene, makeScene, readLibrary, sceneStops, validCycle,
+  writeFileAtomic, writeLibrary,
+} from './library.mjs';
 
 const CONFIG = process.env.COLOURIO_NANOLEAF_CONFIG || join(homedir(), '.config', 'colourio', 'nanoleaf.json');
+const SCENES = process.env.COLOURIO_NANOLEAF_SCENES || join(dirname(CONFIG), 'nanoleaf-scenes.json');
+const CLI = 'node nanoleaf/nanoleaf.mjs';
 
 const HELP = `Send a colourio gradient to Nanoleaf lights.
 
-  node nanoleaf/nanoleaf.mjs pair <ip>
+  ${CLI} pair <ip>
       Pair with the lights. First, in the Nanoleaf app, open the Skylight's
       settings and tap Connect to API; then run this within 30 seconds.
 
-  node nanoleaf/nanoleaf.mjs send [colours]
+  ${CLI} send [colours]
       Show a gradient. Click Copy CSS in colourio, then run this: with no
       colours given, it reads the clipboard. Also takes a colourio link to
       your own photo, or hex colours ("#ff8800 #2244aa").
         --drift          let the gradient flow along the panels and back
         --cycle <secs>   how long one flow takes (default 60)
         --reverse        start the gradient at the other end
-        --save <name>    also save it as a scene on the lights
+        --keep <name>    keep it in your scene library, on this computer
+        --save <name>    save it as a scene on the lights, and keep it too
 
-  node nanoleaf/nanoleaf.mjs layout
+  ${CLI} scenes
+      List the scenes in your library.
+
+  ${CLI} play <name> [--save]
+      Show a scene from your library, fitted to the panels the lights have
+      now. With --save, also save it as a scene on the lights.
+
+  ${CLI} sync
+      Save every scene in your library on the lights, for example after a
+      reset. What's showing doesn't change.
+
+  ${CLI} forget <name>
+      Remove a scene from your library. A copy saved on the lights stays.
+
+  ${CLI} layout
       List the panels in the order the gradient runs.
+
+Your scene library is ${tilde(SCENES)}.
 `;
+
+// Options each command takes. pair, layout and send take what they always
+// have; the newer commands refuse options that don't apply to them.
+const LEGACY = {
+  drift: { type: 'boolean' },
+  cycle: { type: 'string' },
+  reverse: { type: 'boolean' },
+  save: { type: 'string' },
+};
+const OPTIONS = {
+  pair: LEGACY,
+  layout: LEGACY,
+  send: { ...LEGACY, keep: { type: 'string' } },
+  scenes: {},
+  play: { save: { type: 'boolean' } },
+  sync: {},
+  forget: {},
+};
+
+function tilde(path) {
+  const home = homedir();
+  return path.startsWith(home + sep) ? '~' + path.slice(home.length) : path;
+}
 
 function readConfig() {
   try {
@@ -46,11 +97,7 @@ function readConfig() {
   }
 }
 
-function saveConfig(config) {
-  mkdirSync(dirname(CONFIG), { recursive: true });
-  writeFileSync(CONFIG, JSON.stringify(config, null, 2) + '\n');
-  chmodSync(CONFIG, 0o600);
-}
+const saveConfig = (config) => writeFileAtomic(CONFIG, JSON.stringify(config, null, 2) + '\n');
 
 function readClipboard() {
   const readers = [['pbpaste', []], ['wl-paste', ['--no-newline']], ['xclip', ['-o', '-selection', 'clipboard']],
@@ -62,41 +109,79 @@ function readClipboard() {
       // Try the next one.
     }
   }
-  throw new Error('Couldn’t read the clipboard. Pass the colours instead: node nanoleaf/nanoleaf.mjs send "<CSS from colourio>"');
+  throw new Error(`Couldn’t read the clipboard. Pass the colours instead: ${CLI} send "<CSS from colourio>"`);
 }
 
-// A coloured block per panel, in terminals that support 24-bit colour.
-const block = (c, width) => `\x1b[48;2;${c.r};${c.g};${c.b}m${' '.repeat(width)}\x1b[0m`;
-const swatch = (c) => `${block(c, 6)} ${toHex(c)}`;
+// Coloured blocks, in terminals that show 256 or more colours.
+const DEPTH = colourDepth();
+const swatch = (c) => [paint(c, 6, DEPTH), toHex(c)].filter(Boolean).join(' ');
+const strip = (colours, width) => (DEPTH >= 8 ? colours.map((c) => paint(c, width, DEPTH)).join('') : colours.map(toHex).join(' '));
+const how = ({ drift, cycle }) => (drift ? `flowing, ${cycle}s a cycle` : 'still');
+// A scene name as you'd type it in a command.
+const arg = (name) => (/^[\p{L}\p{N}_.-]+$/u.test(name) ? name : `"${name.replace(/(["\\$`])/g, '\\$1')}"`);
 
 function paired() {
   const config = readConfig();
-  if (!config.host || !config.token) throw new Error('Not paired yet. Run: node nanoleaf/nanoleaf.mjs pair <ip>');
+  if (!config.host || !config.token) throw new Error(`Not paired yet. Run: ${CLI} pair <ip>`);
   return config;
 }
 
-async function main(argv) {
-  const { values, positionals } = parseArgs({
-    args: argv,
-    allowPositionals: true,
-    options: {
-      drift: { type: 'boolean', default: false },
-      cycle: { type: 'string', default: '60' },
-      reverse: { type: 'boolean', default: false },
-      save: { type: 'string' },
-      help: { type: 'boolean', short: 'h', default: false },
-    },
-  });
-  const [command, ...rest] = positionals;
+// What send and play print once the lights have it.
+function showColours(stops, still, { drift }) {
+  if (drift) {
+    console.log(`Each panel flows through these ${DRIFT_STEPS} colours and back:`);
+    console.log(`  ${strip(gradientColours(stops), 2)}`);
+  } else {
+    still.forEach((p, i) => console.log(`  ${i + 1}. ${swatch(p.colour)}`));
+  }
+}
 
-  if (values.help || !command) {
+// Adds a scene to the library, reading it afresh in case it changed.
+function keep(scene) {
+  const { library, replaced } = keepScene(readLibrary(SCENES), scene);
+  writeLibrary(SCENES, library);
+  const verb = replaced ? 'Replaced' : 'Kept';
+  console.log(`${verb} “${scene.name}” in your scene library. Show it again any time with: ${CLI} play ${arg(scene.name)}`);
+}
+
+function options(command, argv) {
+  try {
+    return parseArgs({ args: argv, allowPositionals: true, options: { ...OPTIONS[command], help: { type: 'boolean', short: 'h' } } });
+  } catch (error) {
+    const option = error.code === 'ERR_PARSE_ARGS_UNKNOWN_OPTION' && /'([^']+)'/.exec(error.message)?.[1];
+    if (option) throw new Error(`“${command}” doesn’t take ${option}. Run with --help to see what each command takes.`);
+    throw error;
+  }
+}
+
+// The first argument that isn't an option or an option's value, so options
+// can come before the command, as they always could.
+function findCommand(argv) {
+  for (let i = 0; i < argv.length; i++) {
+    if (argv[i] === '--') return argv[i + 1];
+    if (!argv[i].startsWith('-')) return argv[i];
+    if (['--cycle', '--save', '--keep'].includes(argv[i])) i++;
+  }
+  return undefined;
+}
+
+async function main(argv) {
+  const command = findCommand(argv);
+  if (!command) {
+    process.stdout.write(HELP);
+    return;
+  }
+  if (!OPTIONS[command]) throw new Error(`Unknown command “${command}”. Run with --help to see the commands.`);
+  const { values, positionals } = options(command, argv);
+  const rest = positionals.slice(1);
+  if (values.help) {
     process.stdout.write(HELP);
     return;
   }
 
   if (command === 'pair') {
     const host = rest[0];
-    if (!host) throw new Error('Which lights? Run: node nanoleaf/nanoleaf.mjs pair <ip>');
+    if (!host) throw new Error(`Which lights? Run: ${CLI} pair <ip>`);
     const token = await pair(host);
     const info = await getInfo(host, token);
     saveConfig({ host, token });
@@ -113,26 +198,90 @@ async function main(argv) {
   }
 
   if (command === 'send') {
-    const cycle = Number(values.cycle);
-    if (!(cycle >= 5 && cycle <= 3600)) throw new Error('--cycle takes seconds, from 5 to 3600.');
-    const stops = parseGradient(rest.length ? rest.join(' ') : readClipboard());
-    const { host, token } = paired();
-    const slices = panelSlices(await getLayout(host, token), { reverse: values.reverse });
-    const still = stillColours(stops, slices);
-    const panels = values.drift ? driftFrames(stops, slices) : still;
-    await sendEffect(host, token, buildEffect(panels, { drift: values.drift, cycle, name: values.save }));
-    if (values.drift) {
-      console.log(`Each panel flows through these ${DRIFT_STEPS} colours and back:`);
-      console.log(`  ${gradientColours(stops).map((c) => block(c, 2)).join('')}`);
-    } else {
-      still.forEach((p, i) => console.log(`  ${i + 1}. ${swatch(p.colour)}`));
+    const settings = { drift: Boolean(values.drift), cycle: Number(values.cycle ?? 60), reverse: Boolean(values.reverse) };
+    if (!validCycle(settings.cycle)) throw new Error(`--cycle takes seconds, from ${CYCLE_MIN} to ${CYCLE_MAX}.`);
+    if (values.save !== undefined && values.keep !== undefined) {
+      throw new Error('Use --keep or --save, not both: --save keeps the scene in your library too.');
     }
-    const how = values.drift ? `flowing, ${cycle}s a cycle` : 'still';
-    console.log(values.save ? `Saved as “${values.save}” and showing (${how}).` : `Showing (${how}).`);
+    const named = values.save ?? values.keep;
+    const name = named === undefined ? undefined : checkName(named);
+    // Check the library can be read before the lights change.
+    if (name) readLibrary(SCENES);
+    const stops = parseGradient(rest.length ? rest.join(' ') : readClipboard());
+    const scene = name && makeScene(name, stops, settings);
+    const { host, token } = paired();
+    const save = values.save !== undefined ? name : undefined;
+    const { effect, still } = sceneEffect(stops, await getLayout(host, token), { ...settings, saveAs: save });
+    await sendEffect(host, token, effect);
+    showColours(stops, still, settings);
+    console.log(save ? `Saved as “${save}” and showing (${how(settings)}).` : `Showing (${how(settings)}).`);
+    if (scene) keep(scene);
     return;
   }
 
-  throw new Error(`Unknown command “${command}”. Run with --help to see the commands.`);
+  if (command === 'scenes') {
+    const { scenes } = readLibrary(SCENES);
+    if (!scenes.length) {
+      console.log(`No scenes kept yet. Keep one with: ${CLI} send --keep NAME`);
+      return;
+    }
+    console.log(`${scenes.length} ${scenes.length === 1 ? 'scene' : 'scenes'} in ${tilde(SCENES)}:`);
+    const width = Math.max(...scenes.map((s) => [...s.name].length));
+    for (const scene of scenes) {
+      const stops = sceneStops(scene);
+      const preview = DEPTH >= 8 ? strip(gradientColours(stops), 1) : gradientColours(stops, 5).map(toHex).join(' ');
+      const details = how(scene) + (scene.reverse ? ', reversed' : '');
+      const saved = scene.savedAt ? `  ${new Date(scene.savedAt).toISOString().slice(0, 10)}` : '';
+      const pad = ' '.repeat(width - [...scene.name].length);
+      console.log(`  ${scene.name}${pad}  ${preview}  ${details}${saved}`);
+    }
+    console.log(`Show one with: ${CLI} play NAME`);
+    return;
+  }
+
+  if (command === 'play') {
+    if (!rest.length) throw new Error(`Which scene? Run: ${CLI} play NAME (list them with: ${CLI} scenes)`);
+    const scene = findScene(readLibrary(SCENES), rest.join(' '));
+    const { host, token } = paired();
+    const stops = sceneStops(scene);
+    const save = values.save ? scene.name : undefined;
+    const { effect, still } = sceneEffect(stops, await getLayout(host, token), { ...scene, saveAs: save });
+    await sendEffect(host, token, effect);
+    showColours(stops, still, scene);
+    console.log(save ? `Saved “${save}” on the lights and showing it (${how(scene)}).` : `Showing “${scene.name}” (${how(scene)}).`);
+    return;
+  }
+
+  if (command === 'sync') {
+    const { scenes } = readLibrary(SCENES);
+    if (!scenes.length) {
+      console.log(`No scenes kept yet, so there’s nothing to save. Keep one with: ${CLI} send --keep NAME`);
+      return;
+    }
+    const { host, token } = paired();
+    const layout = await getLayout(host, token);
+    let done = 0;
+    for (const scene of scenes) {
+      try {
+        await writeEffect(host, token, sceneEffect(sceneStops(scene), layout, { ...scene, saveAs: scene.name }).effect);
+      } catch (error) {
+        if (done) error.message = `Saved ${done} of ${scenes.length} scenes, then stopped. ${error.message}`;
+        throw error;
+      }
+      done++;
+      console.log(`  ${scene.name}`);
+    }
+    const count = scenes.length === 1 ? '1 scene' : `${scenes.length} scenes`;
+    console.log(`Saved ${count} on the lights, replacing any with the same names. What’s showing hasn’t changed.`);
+    return;
+  }
+
+  if (command === 'forget') {
+    if (!rest.length) throw new Error(`Which scene? Run: ${CLI} forget NAME`);
+    const { library, scene } = forgetScene(readLibrary(SCENES), rest.join(' '));
+    writeLibrary(SCENES, library);
+    console.log(`Forgot “${scene.name}”. A copy saved on the lights stays there until you delete it in the Nanoleaf app.`);
+  }
 }
 
 main(process.argv.slice(2)).catch((error) => {

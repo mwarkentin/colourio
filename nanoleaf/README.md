@@ -54,12 +54,60 @@ Options:
 - `--cycle <seconds>`: about how long one flow takes, out and back (default
   60).
 - `--reverse`: start the gradient at the other end of the panels.
-- `--save <name>`: also save it as a scene on the lights, rather than only
-  showing it. Whether saved scenes show up in the Nanoleaf app hasn't been
-  checked yet. Without it, the gradient shows until you choose another scene.
+- `--keep <name>`: keep it in your scene library on this computer, so you
+  can show it again later. See [Keep scenes](#keep-scenes).
+- `--save <name>`: also save it as a scene on the lights, where it shows up
+  in the Nanoleaf app, and keep it in your scene library. Without `--save`,
+  the gradient shows until you choose another scene.
 
 `node nanoleaf/nanoleaf.mjs layout` lists the panels in the order the gradient
 runs.
+
+## Keep scenes
+
+Scenes saved on the lights can be lost: a factory reset or a firmware update
+can clear them, and they're easy to delete in the app. So the script also
+keeps a library of scenes on your computer. Add to it with `--keep` (or
+`--save`) when you send a gradient:
+
+```sh
+node nanoleaf/nanoleaf.mjs send --keep "Pier at sunset"
+```
+
+Then:
+
+- `scenes` lists them, with a preview of each gradient if your terminal
+  shows colour.
+- `play <name>` shows one. Add `--save` to save it on the lights too.
+- `sync` saves every scene in the library on the lights, for example after a
+  reset or on new lights. It replaces scenes with the same names, and doesn't
+  change what's showing.
+- `forget <name>` removes one from the library. A copy saved on the lights
+  stays until you delete it in the app.
+
+```sh
+node nanoleaf/nanoleaf.mjs scenes
+node nanoleaf/nanoleaf.mjs play pier at sunset
+```
+
+With `play` and `forget`, names don't need quotes and any case works. If a
+name isn't found, the script suggests close ones. Names can be up to 40
+characters.
+
+The library keeps each scene's gradient and options, not the colour of each
+panel. So a scene plays on any lights: after you add or rearrange panels, or
+move to new lights, `play` and `sync` fit it to the panels there now. The
+lights have to be paired, as for `send`.
+
+The library is `~/.config/colourio/nanoleaf-scenes.json`, a plain JSON file
+apart from the token in `nanoleaf.json`, so you can back it up or copy it to
+another computer without sharing the token. It's readable only by you, and
+it's written so that a crash midway can't damage it. If it does get damaged,
+for example by a mistake when editing it by hand, the script says so and
+leaves it alone.
+
+If the previews don't show up but your terminal does show 24-bit colour, set
+`FORCE_COLOR=3`.
 
 ## How colours are chosen
 
@@ -86,6 +134,6 @@ in the Nanoleaf app.
 node --test "nanoleaf/test/*.test.mjs"
 ```
 
-They run against a small stand-in for a three-panel Skylight. The effect
-format follows Nanoleaf's OpenAPI documentation but hasn't been tried on every
-model.
+They run against a small stand-in for a three-panel Skylight, and keep scene
+libraries in temporary folders. The effect format follows Nanoleaf's OpenAPI
+documentation but hasn't been tried on every model.

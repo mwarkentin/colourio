@@ -1,7 +1,8 @@
 // Turns a colourio gradient into a Nanoleaf scene: parsing, mapping colours
-// onto panels by position, building the effect, and the bits of Nanoleaf's
-// local OpenAPI the CLI uses. nanoleaf.mjs is the command line; tests import
-// this module directly.
+// onto panels by position, building the effect, the bits of Nanoleaf's local
+// OpenAPI the CLI uses, and colour previews for the terminal. library.mjs
+// keeps scenes on this computer; nanoleaf.mjs is the command line; tests
+// import these modules directly.
 
 export const PORT = 16021;
 const TIMEOUT_MS = 8000;
@@ -178,6 +179,18 @@ export function buildEffect(panels, { drift = false, fade = 1, cycle = 60, name 
   return { write };
 }
 
+// A gradient fitted to the panels in `layout`: the effect to send, and the
+// colour each panel holds still. This is all a kept scene needs to play on
+// any panels, however many there are and however they're arranged. With
+// `saveAs`, the effect saves it on the lights under that name; a kept
+// scene's own name is ignored, so passing one in never saves it by accident.
+export function sceneEffect(stops, layout, { drift = false, cycle = 60, reverse = false, saveAs } = {}) {
+  const slices = panelSlices(layout, { reverse });
+  const still = stillColours(stops, slices);
+  const panels = drift ? driftFrames(stops, slices) : still;
+  return { effect: buildEffect(panels, { drift, cycle, name: saveAs }), still };
+}
+
 // ---------------------------------------------------------------------------
 // Nanoleaf OpenAPI (local, plain HTTP on port 16021)
 // ---------------------------------------------------------------------------
@@ -231,10 +244,49 @@ const explain = (error) => {
 export const getInfo = (host, token) => call(host, authed(token) + '/').catch(explain);
 export const getLayout = (host, token) => call(host, authed(token) + '/panelLayout/layout').catch(explain);
 
-export async function sendEffect(host, token, effect) {
+// Shows an effect, or with a name, saves it on the lights without showing it.
+export async function writeEffect(host, token, effect) {
   await call(host, authed(token) + '/effects', { method: 'PUT', body: effect }).catch(explain);
+}
+
+export async function sendEffect(host, token, effect) {
+  await writeEffect(host, token, effect);
   // A saved scene is stored, not shown, so select it too.
   if (effect.write.animName) {
     await call(host, authed(token) + '/effects', { method: 'PUT', body: { select: effect.write.animName } }).catch(explain);
   }
+}
+
+// ---------------------------------------------------------------------------
+// Colour previews in the terminal
+// ---------------------------------------------------------------------------
+
+// How many bits of colour the terminal shows: 24 (true colour), 8 (256
+// colours), or fewer, when previews are left out. Set FORCE_COLOR=3 if your
+// terminal shows true colour but isn't detected; NO_COLOR turns previews off.
+export function colourDepth(stream = process.stdout, env = process.env) {
+  if (stream.isTTY && typeof stream.getColorDepth === 'function') return stream.getColorDepth(env);
+  if (env.FORCE_COLOR === undefined) return 1;
+  return { 0: 1, false: 1, 2: 8, 3: 24 }[env.FORCE_COLOR] ?? 4;
+}
+
+// The nearest of the 256 colours most terminals have: a 6×6×6 cube and a
+// ramp of greys.
+export function ansi256({ r, g, b }) {
+  const level = (v) => (v < 48 ? 0 : v < 115 ? 1 : Math.min(5, Math.floor((v - 35) / 40)));
+  const cube = [0, 95, 135, 175, 215, 255];
+  const [ri, gi, bi] = [r, g, b].map(level);
+  const grey = Math.min(23, Math.max(0, Math.round(((r + g + b) / 3 - 8) / 10)));
+  const g8 = 8 + grey * 10;
+  const off = (x, y, z) => (x - r) ** 2 + (y - g) ** 2 + (z - b) ** 2;
+  return off(g8, g8, g8) < off(cube[ri], cube[gi], cube[bi]) ? 232 + grey : 16 + 36 * ri + 6 * gi + bi;
+}
+
+// A block of colour `width` characters wide, or '' where colour isn't shown.
+export function paint(colour, width, depth) {
+  const [r, g, b] = [colour.r, colour.g, colour.b].map(Math.round);
+  const blank = ' '.repeat(width);
+  if (depth >= 24) return `\x1b[48;2;${r};${g};${b}m${blank}\x1b[0m`;
+  if (depth >= 8) return `\x1b[48;5;${ansi256({ r, g, b })}m${blank}\x1b[0m`;
+  return '';
 }
