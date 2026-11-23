@@ -249,8 +249,8 @@ describe('finding scenes', () => {
     assert.throws(() => findScene(library, 'Aurora'), /No scene called “Aurora”\. List your scenes with: .* scenes/);
   });
 
-  test('say how to keep one when there are none', () => {
-    assert.throws(() => findScene(emptyLibrary(), 'Sunset'), /haven’t kept any scenes yet.*--keep/);
+  test('say how to save one when there are none', () => {
+    assert.throws(() => findScene(emptyLibrary(), 'Sunset'), /haven’t saved any scenes yet.*--save/);
   });
 
   test('rank names that contain what you typed first', () => {

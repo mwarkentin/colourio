@@ -41,7 +41,7 @@ const CLI = 'node nanoleaf/nanoleaf.mjs';
 // A scene name, tidied: the same name always matches, however it was typed.
 export function checkName(value) {
   const name = String(value ?? '').normalize('NFC').trim();
-  if (!name) throw new Error('Scenes need a name, like --keep Sunset.');
+  if (!name) throw new Error('Scenes need a name, like --save Sunset.');
   if (/\p{Cc}/u.test(name)) throw new Error('Scene names can’t contain line breaks, tabs or other control characters.');
   const length = [...name].length;
   if (length > NAME_LIMIT) throw new Error(`Scene names can be up to ${NAME_LIMIT} characters; “${name}” has ${length}.`);
@@ -174,7 +174,7 @@ export function findScene(library, query) {
   if (scene) return scene;
 
   const asked = `No scene called “${String(query).trim()}”`;
-  if (!library.scenes.length) throw new Error(`${asked}: you haven’t kept any scenes yet. Keep one with: ${CLI} send --keep NAME`);
+  if (!library.scenes.length) throw new Error(`${asked}: you haven’t saved any scenes yet. Save one with: ${CLI} send --save NAME`);
   const close = closeNames(library.scenes.map((s) => s.name), query);
   if (!close.length) throw new Error(`${asked}. List your scenes with: ${CLI} scenes`);
   const quoted = close.map((n) => `“${n}”`);

@@ -317,14 +317,14 @@ describe('scene library from the command line', () => {
   before(() => writeFileSync(config, JSON.stringify({ host, token: TOKEN })));
 
   test('start with an empty library', async () => {
-    assert.match((await cli(['scenes'])).stdout, /No scenes kept yet/);
+    assert.match((await cli(['scenes'])).stdout, /No scenes in your library yet/);
     assert.equal(existsSync(scenes), false);
   });
 
-  test('send --keep shows the gradient and keeps it, without saving it on the lights', async () => {
-    const { stdout } = await cli(['send', RED_GREEN_BLUE, '--keep', 'Sunset']);
-    assert.match(stdout, /Showing \(still\)\.\nKept “Sunset” in your scene library\. Show it again any time with: .* play Sunset\n/);
-    assert.deepEqual(puts().map((b) => b.write.command), ['display']);
+  test('send --save saves it on the lights and in the library', async () => {
+    const { stdout } = await cli(['send', RED_GREEN_BLUE, '--save', 'Sunset']);
+    assert.match(stdout, /Saved as “Sunset” and showing \(still\)\.\nKept “Sunset” in your scene library\. Show it again any time with: .* play Sunset\n/);
+    assert.deepEqual(puts().map((b) => b.select ?? b.write.command), ['add', 'Sunset']);
     const { version, scenes: kept } = library();
     assert.equal(version, 1);
     assert.deepEqual(kept.map(({ savedAt, ...scene }) => scene), [{
@@ -333,7 +333,7 @@ describe('scene library from the command line', () => {
     if (process.platform !== 'win32') assert.equal(statSync(scenes).mode & 0o777, 0o600);
   });
 
-  test('send --save saves it on the lights and keeps it too', async () => {
+  test('keep a flowing scene’s options', async () => {
     const { stdout } = await cli(['send', RED_GREEN_BLUE, '--drift', '--cycle', '30', '--reverse', '--save', 'Ocean flow']);
     assert.match(stdout, /Saved as “Ocean flow” and showing \(flowing, 30s a cycle\)\./);
     assert.match(stdout, /Kept “Ocean flow” .* play "Ocean flow"/);
@@ -343,9 +343,9 @@ describe('scene library from the command line', () => {
   });
 
   test('keeping a name again replaces that scene', async () => {
-    const { stdout } = await cli(['send', '#000000 #ffffff', '--keep', 'Dusk']);
+    const { stdout } = await cli(['send', '#000000 #ffffff', '--save', 'Dusk']);
     assert.match(stdout, /Kept “Dusk”/);
-    assert.match((await cli(['send', '#222244 #000000', '--keep', 'dusk'])).stdout, /Replaced “dusk”/);
+    assert.match((await cli(['send', '#222244 #000000', '--save', 'dusk'])).stdout, /Replaced “dusk”/);
     const names = library().scenes.map((s) => s.name);
     assert.deepEqual(names, ['dusk', 'Ocean flow', 'Sunset']);
     assert.deepEqual(library().scenes[0].stops, ['#222244 0%', '#000000 100%']);
@@ -391,12 +391,11 @@ describe('scene library from the command line', () => {
   test('refuse options that only send takes', async () => {
     await assert.rejects(cli(['play', 'Sunset', '--drift']), fails(/“play” doesn’t take --drift/));
     await assert.rejects(cli(['scenes', '--reverse']), fails(/“scenes” doesn’t take --reverse/));
-    await assert.rejects(cli(['send', '#ff0000', '--keep', 'A', '--save', 'B']), fails(/--keep or --save, not both/));
     assert.deepEqual(device.requests, []);
   });
 
   test('refuse a name that won’t work before touching the lights', async () => {
-    await assert.rejects(cli(['send', '#ff0000', '--keep', '*Solid*']), fails(/used by the lights/));
+    await assert.rejects(cli(['send', '#ff0000', '--save', '*Solid*']), fails(/used by the lights/));
     await assert.rejects(cli(['send', '#ff0000', '--save', 'x'.repeat(41)]), fails(/up to 40 characters/));
     assert.deepEqual(device.requests, []);
   });
@@ -420,7 +419,7 @@ describe('scene library from the command line', () => {
     const other = join(dir, 'damaged.json');
     writeFileSync(other, '{"version": 1, "scenes": [');
     const extra = { COLOURIO_NANOLEAF_SCENES: other };
-    for (const args of [['scenes'], ['play', 'Sunset'], ['sync'], ['forget', 'Sunset'], ['send', '#ff0000', '--keep', 'New']]) {
+    for (const args of [['scenes'], ['play', 'Sunset'], ['sync'], ['forget', 'Sunset'], ['send', '#ff0000', '--save', 'New']]) {
       await assert.rejects(cli(args, extra), fails(/damaged\.json isn’t valid JSON .* Nothing was changed/), args.join(' '));
     }
     assert.equal(readFileSync(other, 'utf8'), '{"version": 1, "scenes": [');

@@ -54,34 +54,32 @@ Options:
 - `--cycle <seconds>`: about how long one flow takes, out and back (default
   60).
 - `--reverse`: start the gradient at the other end of the panels.
-- `--keep <name>`: keep it in your scene library on this computer, so you
-  can show it again later. See [Keep scenes](#keep-scenes).
 - `--save <name>`: also save it as a scene on the lights, where it shows up
-  in the Nanoleaf app, and keep it in your scene library. Without `--save`,
-  the gradient shows until you choose another scene.
+  in the Nanoleaf app, and in your scene library on this computer. See
+  [Saved scenes](#saved-scenes). Without `--save`, the gradient shows until
+  you choose another scene.
 
 `node nanoleaf/nanoleaf.mjs layout` lists the panels in the order the gradient
 runs.
 
-## Keep scenes
+## Saved scenes
 
 Scenes saved on the lights can be lost: a factory reset or a firmware update
-can clear them, and they're easy to delete in the app. So the script also
-keeps a library of scenes on your computer. Add to it with `--keep` (or
-`--save`) when you send a gradient:
+can clear them, and they're easy to delete in the app. So `--save` also keeps
+a copy in a scene library on your computer:
 
 ```sh
-node nanoleaf/nanoleaf.mjs send --keep "Pier at sunset"
+node nanoleaf/nanoleaf.mjs send --save "Pier at sunset"
 ```
 
 Then:
 
 - `scenes` lists them, with a preview of each gradient if your terminal
   shows colour.
-- `play <name>` shows one. Add `--save` to save it on the lights too.
-- `sync` saves every scene in the library on the lights, for example after a
-  reset or on new lights. It replaces scenes with the same names, and doesn't
-  change what's showing.
+- `play <name>` shows one. Add `--save` to save it on the lights again too.
+- `sync` puts every scene in the library back on the lights, for example
+  after a reset or on new lights. It replaces scenes with the same names, and
+  doesn't change what's showing.
 - `forget <name>` removes one from the library. A copy saved on the lights
   stays until you delete it in the app.
 

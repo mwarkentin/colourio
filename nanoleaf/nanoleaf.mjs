@@ -4,10 +4,10 @@
 // README.md.
 //
 //   node nanoleaf/nanoleaf.mjs pair <ip>      once, after Connect to API in the app
-//   node nanoleaf/nanoleaf.mjs send [colours] [--drift] [--cycle 60] [--reverse] [--keep NAME | --save NAME]
-//   node nanoleaf/nanoleaf.mjs scenes         list the scenes you've kept
+//   node nanoleaf/nanoleaf.mjs send [colours] [--drift] [--cycle 60] [--reverse] [--save NAME]
+//   node nanoleaf/nanoleaf.mjs scenes         list the scenes you've saved
 //   node nanoleaf/nanoleaf.mjs play NAME [--save]
-//   node nanoleaf/nanoleaf.mjs sync           save every kept scene on the lights
+//   node nanoleaf/nanoleaf.mjs sync           put every saved scene back on the lights
 //   node nanoleaf/nanoleaf.mjs forget NAME
 //   node nanoleaf/nanoleaf.mjs layout         list the panels in gradient order
 
@@ -43,8 +43,8 @@ const HELP = `Send a colourio gradient to Nanoleaf lights.
         --drift          let the gradient flow along the panels and back
         --cycle <secs>   how long one flow takes (default 60)
         --reverse        start the gradient at the other end
-        --keep <name>    keep it in your scene library, on this computer
-        --save <name>    save it as a scene on the lights, and keep it too
+        --save <name>    save it as a scene on the lights, and in your scene
+                         library on this computer
 
   ${CLI} scenes
       List the scenes in your library.
@@ -77,7 +77,7 @@ const LEGACY = {
 const OPTIONS = {
   pair: LEGACY,
   layout: LEGACY,
-  send: { ...LEGACY, keep: { type: 'string' } },
+  send: LEGACY,
   scenes: {},
   play: { save: { type: 'boolean' } },
   sync: {},
@@ -160,7 +160,7 @@ function findCommand(argv) {
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === '--') return argv[i + 1];
     if (!argv[i].startsWith('-')) return argv[i];
-    if (['--cycle', '--save', '--keep'].includes(argv[i])) i++;
+    if (['--cycle', '--save'].includes(argv[i])) i++;
   }
   return undefined;
 }
@@ -200,21 +200,16 @@ async function main(argv) {
   if (command === 'send') {
     const settings = { drift: Boolean(values.drift), cycle: Number(values.cycle ?? 60), reverse: Boolean(values.reverse) };
     if (!validCycle(settings.cycle)) throw new Error(`--cycle takes seconds, from ${CYCLE_MIN} to ${CYCLE_MAX}.`);
-    if (values.save !== undefined && values.keep !== undefined) {
-      throw new Error('Use --keep or --save, not both: --save keeps the scene in your library too.');
-    }
-    const named = values.save ?? values.keep;
-    const name = named === undefined ? undefined : checkName(named);
+    const name = values.save === undefined ? undefined : checkName(values.save);
     // Check the library can be read before the lights change.
     if (name) readLibrary(SCENES);
     const stops = parseGradient(rest.length ? rest.join(' ') : readClipboard());
     const scene = name && makeScene(name, stops, settings);
     const { host, token } = paired();
-    const save = values.save !== undefined ? name : undefined;
-    const { effect, still } = sceneEffect(stops, await getLayout(host, token), { ...settings, saveAs: save });
+    const { effect, still } = sceneEffect(stops, await getLayout(host, token), { ...settings, saveAs: name });
     await sendEffect(host, token, effect);
     showColours(stops, still, settings);
-    console.log(save ? `Saved as “${save}” and showing (${how(settings)}).` : `Showing (${how(settings)}).`);
+    console.log(name ? `Saved as “${name}” and showing (${how(settings)}).` : `Showing (${how(settings)}).`);
     if (scene) keep(scene);
     return;
   }
@@ -222,7 +217,7 @@ async function main(argv) {
   if (command === 'scenes') {
     const { scenes } = readLibrary(SCENES);
     if (!scenes.length) {
-      console.log(`No scenes kept yet. Keep one with: ${CLI} send --keep NAME`);
+      console.log(`No scenes in your library yet. Save one with: ${CLI} send --save NAME`);
       return;
     }
     console.log(`${scenes.length} ${scenes.length === 1 ? 'scene' : 'scenes'} in ${tilde(SCENES)}:`);
@@ -255,7 +250,7 @@ async function main(argv) {
   if (command === 'sync') {
     const { scenes } = readLibrary(SCENES);
     if (!scenes.length) {
-      console.log(`No scenes kept yet, so there’s nothing to save. Keep one with: ${CLI} send --keep NAME`);
+      console.log(`No scenes in your library yet, so there’s nothing to put back. Save one with: ${CLI} send --save NAME`);
       return;
     }
     const { host, token } = paired();
