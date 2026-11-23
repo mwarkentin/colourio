@@ -23,7 +23,8 @@ const still = { drift: false, cycle: 60, reverse: false };
 const sunset = makeScene('Sunset', RED_GREEN_BLUE, still, NOW);
 
 const folder = () => mkdtempSync(join(tmpdir(), 'colourio-scenes-'));
-const libraryOf = (...scenes) => ({ version: VERSION, scenes });
+// A library with these scenes saved in turn, numbered 1, 2, 3...
+const libraryOf = (...scenes) => scenes.reduce((library, scene) => keepScene(library, scene).library, emptyLibrary());
 const raw = (file) => JSON.parse(readFileSync(file, 'utf8'));
 
 // ---------------------------------------------------------------------------
@@ -35,7 +36,7 @@ describe('scene names', () => {
     assert.equal(checkName('  Sunset over the bay  '), 'Sunset over the bay');
     assert.equal(checkName('Café'), 'Café');
     // An accent typed as a separate mark is the same name.
-    assert.equal(checkName('Café'), 'Café');
+    assert.equal(checkName('Cafe\u0301'), 'Café');
   });
 
   test('refuse names that won’t work', () => {
@@ -46,6 +47,9 @@ describe('scene names', () => {
     assert.throws(() => checkName('Two\nlines'), /control characters/);
     assert.throws(() => checkName('-drift'), /start with “-”/);
     assert.throws(() => checkName('*Solid*'), /used by the lights/);
+    // Numbers pick scenes by ID.
+    assert.throws(() => checkName('2024'), /can’t be just a number/);
+    assert.equal(checkName('2024 sunset'), '2024 sunset');
   });
 });
 
@@ -98,7 +102,7 @@ describe('reading the library', () => {
 
   test('treat an empty file as an empty library', () => {
     const file = join(folder(), 'nanoleaf-scenes.json');
-    for (const text of ['', '  \n', '﻿']) {
+    for (const text of ['', '  \n', '\uFEFF']) {
       writeFileSync(file, text);
       assert.deepEqual(readLibrary(file), emptyLibrary());
     }
@@ -107,16 +111,27 @@ describe('reading the library', () => {
   test('read a file saved with a byte order mark, or as UTF-16 by PowerShell', () => {
     const file = join(folder(), 'nanoleaf-scenes.json');
     const json = JSON.stringify(libraryOf(sunset));
-    writeFileSync(file, '﻿' + json);
-    assert.deepEqual(readLibrary(file).scenes, [sunset]);
-    writeFileSync(file, Buffer.from('﻿' + json, 'utf16le'));
-    assert.deepEqual(readLibrary(file).scenes, [sunset]);
+    writeFileSync(file, '\uFEFF' + json);
+    assert.deepEqual(readLibrary(file).scenes, [{ id: 1, ...sunset }]);
+    writeFileSync(file, Buffer.from('\uFEFF' + json, 'utf16le'));
+    assert.deepEqual(readLibrary(file).scenes, [{ id: 1, ...sunset }]);
   });
 
   test('fill in options a hand-written scene leaves out, and keep fields it doesn’t know', () => {
     const file = join(folder(), 'nanoleaf-scenes.json');
     writeFileSync(file, JSON.stringify({ version: 1, scenes: [{ name: 'Mine', stops: ['#ffffff 0%'], mood: 'calm' }] }));
-    assert.deepEqual(readLibrary(file).scenes, [{ name: 'Mine', drift: false, cycle: 60, reverse: false, stops: ['#ffffff 0%'], mood: 'calm' }]);
+    assert.deepEqual(readLibrary(file).scenes, [{ id: 1, name: 'Mine', drift: false, cycle: 60, reverse: false, stops: ['#ffffff 0%'], mood: 'calm' }]);
+  });
+
+  test('number scenes added by hand after the others', () => {
+    const file = join(folder(), 'nanoleaf-scenes.json');
+    const stops = ['#ffffff 0%'];
+    writeFileSync(file, JSON.stringify({
+      version: 1, nextId: 6, scenes: [{ name: 'New', stops }, { id: 5, name: 'Old', stops }, { name: 'Newer', stops }],
+    }));
+    const library = readLibrary(file);
+    assert.deepEqual(library.scenes.map((s) => [s.id, s.name]), [[6, 'New'], [5, 'Old'], [7, 'Newer']]);
+    assert.equal(library.nextId, 8);
   });
 
   test('explain a damaged file, and leave it alone', () => {
@@ -132,6 +147,10 @@ describe('reading the library', () => {
       ['{"version": 1, "scenes": [{"name": "A", "stops": ["#ff0000 0%"], "drift": "yes"}]}', /“drift”/],
       ['{"version": 1, "scenes": [{"name": "", "stops": ["#ff0000 0%"]}]}', /Scene 1 \(“”\) has a name that won’t work/],
       ['{"version": 1, "scenes": [{"name": "A", "stops": ["#ff0000 0%"]}, {"name": "a", "stops": ["#ff0000 0%"]}]}', /two scenes called “a”/],
+      ['{"version": 1, "scenes": [{"id": 1, "name": "A", "stops": ["#ff0000 0%"]}, {"id": 1, "name": "B", "stops": ["#ff0000 0%"]}]}', /two scenes with ID 1/],
+      ['{"version": 1, "scenes": [{"id": "1", "name": "A", "stops": ["#ff0000 0%"]}]}', /Scene 1 \(“A”\) has an “id” that isn’t a whole number/],
+      ['{"version": 1, "scenes": [{"id": 0, "name": "A", "stops": ["#ff0000 0%"]}]}', /has an “id”/],
+      ['{"version": 1, "nextId": 1.5, "scenes": []}', /“nextId”/],
     ];
     for (const [text, message] of cases) {
       writeFileSync(file, text);
@@ -149,16 +168,18 @@ describe('reading the library', () => {
 });
 
 describe('writing the library', () => {
-  test('write a versioned file, sorted by name, that reads back the same', () => {
+  test('write a versioned file, in ID order, that reads back the same', () => {
     const dir = folder();
     const file = join(dir, 'colourio', 'nanoleaf-scenes.json');
     const dusk = makeScene('dusk', parseGradient('#222244 #000000'), still, NOW);
     writeLibrary(file, libraryOf(sunset, dusk));
     const written = raw(file);
     assert.equal(written.version, 1);
-    assert.deepEqual(written.scenes.map((s) => s.name), ['dusk', 'Sunset']);
+    assert.equal(written.nextId, 3);
+    assert.deepEqual(written.scenes.map((s) => [s.id, s.name]), [[1, 'Sunset'], [2, 'dusk']]);
+    assert.deepEqual(Object.keys(written.scenes[0]).slice(0, 2), ['id', 'name'], 'easy to read');
     assert.ok(readFileSync(file, 'utf8').endsWith('}\n'));
-    assert.deepEqual(readLibrary(file), libraryOf(dusk, sunset));
+    assert.deepEqual(readLibrary(file), libraryOf(sunset, dusk));
   });
 
   test('make the file, and a new folder, readable only by you', { skip: process.platform === 'win32' }, () => {
@@ -212,7 +233,7 @@ describe('writing the library', () => {
     symlinkSync(real, link);
     writeLibrary(link, libraryOf(sunset));
     assert.ok(lstatSync(link).isSymbolicLink());
-    assert.deepEqual(raw(real).scenes, [sunset]);
+    assert.deepEqual(raw(real).scenes, [{ id: 1, ...sunset }]);
   });
 
   test('write the pairing file the same way', { skip: process.platform === 'win32' }, () => {
@@ -233,9 +254,16 @@ describe('finding scenes', () => {
   const library = libraryOf(sunset, flow, glow, ocean);
 
   test('find a scene by name, in any case', () => {
-    assert.equal(findScene(library, 'Sunset'), sunset);
-    assert.equal(findScene(library, 'SUNSET'), sunset);
-    assert.equal(findScene(library, '  ocean SUNSET '), ocean);
+    assert.equal(findScene(library, 'Sunset').name, 'Sunset');
+    assert.equal(findScene(library, 'SUNSET').name, 'Sunset');
+    assert.equal(findScene(library, '  ocean SUNSET ').name, 'Ocean sunset');
+  });
+
+  test('find a scene by ID', () => {
+    assert.equal(findScene(library, '1').name, 'Sunset');
+    assert.equal(findScene(library, ' 4 ').name, 'Ocean sunset');
+    assert.throws(() => findScene(library, '9'), /^Error: No scene with ID 9\. List your scenes with: .* scenes$/);
+    assert.throws(() => findScene(emptyLibrary(), '1'), /No scene 1: you haven’t saved any scenes yet/);
   });
 
   test('suggest close names for a typo', () => {
@@ -258,20 +286,32 @@ describe('finding scenes', () => {
     assert.deepEqual(closeNames(['Sunset'], ''), []);
   });
 
-  test('keep a scene, replacing one with the same name in any case', () => {
+  test('keep a scene with the next ID', () => {
     const first = keepScene(emptyLibrary(), sunset);
     assert.equal(first.replaced, null);
-    const renamed = makeScene('sunset', parseGradient('#000000 #ffffff'), still, NOW);
-    const second = keepScene(first.library, renamed);
-    assert.equal(second.replaced, sunset);
-    assert.deepEqual(second.library.scenes, [renamed]);
+    assert.deepEqual(first.scene, { id: 1, ...sunset });
+    assert.deepEqual(first.library, { version: 1, nextId: 2, scenes: [{ id: 1, ...sunset }] });
+    assert.equal(keepScene(first.library, flow).scene.id, 2);
   });
 
-  test('forget a scene', () => {
+  test('replace a scene with the same name in any case, keeping its ID', () => {
+    const renamed = makeScene('glow', parseGradient('#000000 #ffffff'), still, NOW);
+    const { library: after, scene, replaced } = keepScene(library, renamed);
+    assert.equal(replaced.name, 'Glow');
+    assert.deepEqual(scene, { id: 3, ...renamed });
+    assert.deepEqual(after.scenes.map((s) => [s.id, s.name]), [[1, 'Sunset'], [2, 'Flow'], [3, 'glow'], [4, 'Ocean sunset']]);
+    assert.equal(after.nextId, 5);
+  });
+
+  test('forget a scene by name or ID, without reusing its ID', () => {
     const { library: left, scene } = forgetScene(library, 'flow');
-    assert.equal(scene, flow);
+    assert.equal(scene.id, 2);
     assert.deepEqual(left.scenes.map((s) => s.name), ['Sunset', 'Glow', 'Ocean sunset']);
     assert.throws(() => forgetScene(left, 'flow'), /No scene called “flow”/);
+    const { library: fewer } = forgetScene(left, '4');
+    assert.deepEqual(fewer.scenes.map((s) => s.id), [1, 3]);
+    // The next scene gets 5, not 2 or 4, so an old “play 4” never plays it.
+    assert.equal(keepScene(fewer, makeScene('Dawn', RED_GREEN_BLUE, still, NOW)).scene.id, 5);
   });
 });
 

@@ -428,10 +428,10 @@ a Skylight: click **Copy CSS**, then run
 `node nanoleaf/nanoleaf.mjs send` on a computer on the same Wi-Fi. Each panel
 gets the average colour of its stretch of the gradient, or with `--drift` the
 gradient flows along the panels. With `--save NAME`, the scene is saved on
-the lights and in a library on your computer: `play NAME` shows it again on
-any panels, and `sync` puts every saved scene back on the lights after a
-reset. See [nanoleaf/README.md](nanoleaf/README.md) to pair it with your
-lights.
+the lights and in a numbered library on your computer: `play 1` (or
+`play NAME`) shows it again on any panels, and `sync` puts every saved scene
+back on the lights after a reset. See [nanoleaf/README.md](nanoleaf/README.md)
+to pair it with your lights.
 
 ## Controls
 

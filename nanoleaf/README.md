@@ -74,23 +74,30 @@ node nanoleaf/nanoleaf.mjs send --save "Pier at sunset"
 
 Then:
 
-- `scenes` lists them, with a preview of each gradient if your terminal
-  shows colour.
-- `play <name>` shows one. Add `--save` to save it on the lights again too.
+- `scenes` lists them with their IDs, and a preview of each gradient if your
+  terminal shows colour.
+- `play <ID or name>` shows one. Add `--save` to save it on the lights again
+  too.
 - `sync` puts every scene in the library back on the lights, for example
   after a reset or on new lights. It replaces scenes with the same names, and
   doesn't change what's showing.
-- `forget <name>` removes one from the library. A copy saved on the lights
-  stays until you delete it in the app.
+- `forget <ID or name>` removes one from the library. A copy saved on the
+  lights stays until you delete it in the app.
 
 ```sh
 node nanoleaf/nanoleaf.mjs scenes
+node nanoleaf/nanoleaf.mjs play 1
 node nanoleaf/nanoleaf.mjs play pier at sunset
 ```
 
+Each scene gets the next number when you first save it, and keeps it: saving
+again under the same name replaces the scene but keeps its number, and a
+number isn't reused after you forget its scene. So `play 1` always means the
+same scene.
+
 With `play` and `forget`, names don't need quotes and any case works. If a
 name isn't found, the script suggests close ones. Names can be up to 40
-characters.
+characters, and can't be just a number.
 
 The library keeps each scene's gradient and options, not the colour of each
 panel. So a scene plays on any lights: after you add or rearrange panels, or

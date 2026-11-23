@@ -9,12 +9,17 @@
 //
 //   {
 //     "version": 1,
+//     "nextId": 2,
 //     "scenes": [
-//       { "name": "Sunset", "drift": false, "cycle": 60, "reverse": false,
+//       { "id": 1, "name": "Sunset", "drift": false, "cycle": 60, "reverse": false,
 //         "savedAt": "2026-11-23T14:00:00.000Z",
 //         "stops": ["#ff5e3a 0%", "#ff9f40 50%", "#3a1c71 100%"] }
 //     ]
 //   }
+//
+// Each scene gets the next number when it's first saved, so `play 1` always
+// means the same scene: saving one again under its name keeps its number,
+// and numbers aren't reused after a scene is forgotten.
 
 import { randomBytes } from 'node:crypto';
 import {
@@ -48,8 +53,11 @@ export function checkName(value) {
   if (name.startsWith('-')) throw new Error('Scene names can’t start with “-”.');
   // The lights report what's showing as *Solid*, *Dynamic* and the like.
   if (/^\*.*\*$/.test(name)) throw new Error(`Names like “${name}” are used by the lights themselves, so pick another.`);
+  if (/^\d+$/.test(name)) throw new Error(`Scene names can’t be just a number, because numbers pick scenes by ID, as in: ${CLI} play 1`);
   return name;
 }
+
+const validId = (id) => Number.isSafeInteger(id) && id > 0;
 
 export const validCycle = (cycle) => typeof cycle === 'number' && cycle >= CYCLE_MIN && cycle <= CYCLE_MAX;
 
@@ -68,6 +76,7 @@ function parseStop(text) {
 export const sceneStops = (scene) => scene.stops.map(parseStop).sort((a, b) => a.at - b.at);
 
 // A scene to keep, from the stops parseGradient gives and send's options.
+// keepScene gives it its ID.
 export function makeScene(name, stops, { drift, cycle, reverse } = {}, now = new Date()) {
   return checkScene({
     name, drift: Boolean(drift), cycle: cycle ?? DEFAULTS.cycle, reverse: Boolean(reverse), savedAt: now.toISOString(),
@@ -96,6 +105,7 @@ function checkScene(raw, where = 'The scene') {
   if (!Array.isArray(scene.stops) || !scene.stops.length) throw bad('has no colours.');
   const broken = scene.stops.find((stop) => !parseStop(stop));
   if (broken !== undefined) throw bad(`has a colour stop that isn’t like "#ff8800 50%": ${JSON.stringify(broken)}.`);
+  if (scene.id !== undefined && !validId(scene.id)) throw bad('has an “id” that isn’t a whole number from 1 up.');
   return scene;
 }
 
@@ -105,8 +115,10 @@ function checkScene(raw, where = 'The scene') {
 
 const key = (name) => String(name).normalize('NFC').trim().toLowerCase();
 const byName = (a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }) || (a.name < b.name ? -1 : 1);
+// The ID goes first, so the file reads well.
+const withId = (id, { id: _, ...scene }) => ({ id, ...scene });
 
-export const emptyLibrary = () => ({ version: VERSION, scenes: [] });
+export const emptyLibrary = () => ({ version: VERSION, nextId: 1, scenes: [] });
 
 // A missing or empty file is an empty library. Anything else that isn't a
 // library is an error: the file is left alone rather than overwritten.
@@ -121,7 +133,7 @@ export function readLibrary(file) {
   // Allow for editors that save with a byte order mark, and for PowerShell,
   // which saves as UTF-16.
   text = text[0] === 0xff && text[1] === 0xfe ? text.toString('utf16le') : text.toString('utf8');
-  text = text.replace(/^﻿/, '');
+  text = text.replace(/^\uFEFF/, '');
   if (!text.trim()) return emptyLibrary();
 
   const problem = (what) => new Error(
@@ -140,8 +152,11 @@ export function readLibrary(file) {
   if (data.version !== VERSION) throw problem(`has no “version”: ${VERSION}, so it isn’t a scene library.`);
   if (!Array.isArray(data.scenes)) throw problem('has no list of “scenes”.');
 
-  const seen = new Map();
-  const scenes = data.scenes.map((raw, i) => {
+  if (data.nextId !== undefined && !validId(data.nextId)) throw problem('has a “nextId” that isn’t a whole number from 1 up.');
+
+  const names = new Set();
+  const ids = new Set();
+  const checked = data.scenes.map((raw, i) => {
     const label = typeof raw?.name === 'string' ? ` (“${raw.name}”)` : '';
     let scene;
     try {
@@ -149,26 +164,44 @@ export function readLibrary(file) {
     } catch (error) {
       throw problem(`has a problem. ${error.message}`);
     }
-    if (seen.has(key(scene.name))) throw problem(`has two scenes called “${scene.name}”.`);
-    seen.set(key(scene.name), scene);
+    if (names.has(key(scene.name))) throw problem(`has two scenes called “${scene.name}”.`);
+    names.add(key(scene.name));
+    if (scene.id !== undefined && ids.has(scene.id)) throw problem(`has two scenes with ID ${scene.id}.`);
+    ids.add(scene.id);
     return scene;
   });
-  return { ...data, scenes };
+  // Number any scenes added by hand without an ID, after the others.
+  let nextId = Math.max(data.nextId ?? 1, ...checked.map((s) => (s.id ?? 0) + 1));
+  const scenes = checked.map((scene) => (scene.id === undefined ? withId(nextId++, scene) : scene));
+  return { version: VERSION, ...data, nextId, scenes };
 }
 
 export function writeLibrary(file, library) {
-  const scenes = [...library.scenes].sort(byName);
-  writeFileAtomic(file, JSON.stringify({ ...library, version: VERSION, scenes }, null, 2) + '\n');
+  const scenes = [...library.scenes].sort((a, b) => a.id - b.id);
+  const nextId = Math.max(library.nextId ?? 1, ...scenes.map((s) => s.id + 1));
+  writeFileAtomic(file, JSON.stringify({ version: VERSION, nextId, ...library, scenes }, null, 2) + '\n');
 }
 
-// Adds a scene, replacing one with the same name in any case.
+// Adds a scene with the next ID, or replaces one with the same name in any
+// case, keeping its ID.
 export function keepScene(library, scene) {
   const replaced = library.scenes.find((s) => key(s.name) === key(scene.name)) || null;
-  const scenes = library.scenes.filter((s) => s !== replaced).concat(scene);
-  return { library: { ...library, scenes }, replaced };
+  const nextId = library.nextId ?? 1;
+  const kept = withId(replaced ? replaced.id : nextId, scene);
+  const scenes = library.scenes.map((s) => (s === replaced ? kept : s));
+  if (!replaced) scenes.push(kept);
+  return { library: { ...library, nextId: replaced ? nextId : nextId + 1, scenes }, scene: kept, replaced };
 }
 
+// A scene by ID ("3") or by name, in any case.
 export function findScene(library, query) {
+  const text = String(query).trim();
+  if (/^\d+$/.test(text)) {
+    const scene = library.scenes.find((s) => s.id === Number(text));
+    if (scene) return scene;
+    if (!library.scenes.length) throw new Error(`No scene ${text}: you haven’t saved any scenes yet. Save one with: ${CLI} send --save NAME`);
+    throw new Error(`No scene with ID ${text}. List your scenes with: ${CLI} scenes`);
+  }
   const wanted = key(query);
   const scene = library.scenes.find((s) => s.name === query) || library.scenes.find((s) => key(s.name) === wanted);
   if (scene) return scene;

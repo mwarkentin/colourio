@@ -6,9 +6,9 @@
 //   node nanoleaf/nanoleaf.mjs pair <ip>      once, after Connect to API in the app
 //   node nanoleaf/nanoleaf.mjs send [colours] [--drift] [--cycle 60] [--reverse] [--save NAME]
 //   node nanoleaf/nanoleaf.mjs scenes         list the scenes you've saved
-//   node nanoleaf/nanoleaf.mjs play NAME [--save]
+//   node nanoleaf/nanoleaf.mjs play NAME|ID [--save]
 //   node nanoleaf/nanoleaf.mjs sync           put every saved scene back on the lights
-//   node nanoleaf/nanoleaf.mjs forget NAME
+//   node nanoleaf/nanoleaf.mjs forget NAME|ID
 //   node nanoleaf/nanoleaf.mjs layout         list the panels in gradient order
 
 import { execFileSync } from 'node:child_process';
@@ -47,17 +47,18 @@ const HELP = `Send a colourio gradient to Nanoleaf lights.
                          library on this computer
 
   ${CLI} scenes
-      List the scenes in your library.
+      List the scenes in your library, with their IDs.
 
-  ${CLI} play <name> [--save]
+  ${CLI} play <name or ID> [--save]
       Show a scene from your library, fitted to the panels the lights have
-      now. With --save, also save it as a scene on the lights.
+      now: play 1, or play pier at sunset. With --save, also save it as a
+      scene on the lights.
 
   ${CLI} sync
       Save every scene in your library on the lights, for example after a
       reset. What's showing doesn't change.
 
-  ${CLI} forget <name>
+  ${CLI} forget <name or ID>
       Remove a scene from your library. A copy saved on the lights stays.
 
   ${CLI} layout
@@ -117,8 +118,11 @@ const DEPTH = colourDepth();
 const swatch = (c) => [paint(c, 6, DEPTH), toHex(c)].filter(Boolean).join(' ');
 const strip = (colours, width) => (DEPTH >= 8 ? colours.map((c) => paint(c, width, DEPTH)).join('') : colours.map(toHex).join(' '));
 const how = ({ drift, cycle }) => (drift ? `flowing, ${cycle}s a cycle` : 'still');
-// A scene name as you'd type it in a command.
-const arg = (name) => (/^[\p{L}\p{N}_.-]+$/u.test(name) ? name : `"${name.replace(/(["\\$`])/g, '\\$1')}"`);
+// IDs lined up on the right, as wide as the longest.
+const idColumn = (scenes) => {
+  const width = String(Math.max(...scenes.map((s) => s.id))).length;
+  return (scene) => String(scene.id).padStart(width);
+};
 
 function paired() {
   const config = readConfig();
@@ -138,10 +142,12 @@ function showColours(stops, still, { drift }) {
 
 // Adds a scene to the library, reading it afresh in case it changed.
 function keep(scene) {
-  const { library, replaced } = keepScene(readLibrary(SCENES), scene);
+  const { library, scene: kept, replaced } = keepScene(readLibrary(SCENES), scene);
   writeLibrary(SCENES, library);
-  const verb = replaced ? 'Replaced' : 'Kept';
-  console.log(`${verb} “${scene.name}” in your scene library. Show it again any time with: ${CLI} play ${arg(scene.name)}`);
+  const what = replaced
+    ? `Replaced “${kept.name}” in your scene library; it’s still scene ${kept.id}.`
+    : `Kept “${kept.name}” in your scene library as scene ${kept.id}.`;
+  console.log(`${what} Show it again any time with: ${CLI} play ${kept.id}`);
 }
 
 function options(command, argv) {
@@ -222,20 +228,21 @@ async function main(argv) {
     }
     console.log(`${scenes.length} ${scenes.length === 1 ? 'scene' : 'scenes'} in ${tilde(SCENES)}:`);
     const width = Math.max(...scenes.map((s) => [...s.name].length));
+    const id = idColumn(scenes);
     for (const scene of scenes) {
       const stops = sceneStops(scene);
       const preview = DEPTH >= 8 ? strip(gradientColours(stops), 1) : gradientColours(stops, 5).map(toHex).join(' ');
       const details = how(scene) + (scene.reverse ? ', reversed' : '');
       const saved = scene.savedAt ? `  ${new Date(scene.savedAt).toISOString().slice(0, 10)}` : '';
       const pad = ' '.repeat(width - [...scene.name].length);
-      console.log(`  ${scene.name}${pad}  ${preview}  ${details}${saved}`);
+      console.log(`  ${id(scene)}  ${scene.name}${pad}  ${preview}  ${details}${saved}`);
     }
-    console.log(`Show one with: ${CLI} play NAME`);
+    console.log(`Show one with: ${CLI} play ID (or its name)`);
     return;
   }
 
   if (command === 'play') {
-    if (!rest.length) throw new Error(`Which scene? Run: ${CLI} play NAME (list them with: ${CLI} scenes)`);
+    if (!rest.length) throw new Error(`Which scene? Run: ${CLI} play ID or NAME (list them with: ${CLI} scenes)`);
     const scene = findScene(readLibrary(SCENES), rest.join(' '));
     const { host, token } = paired();
     const stops = sceneStops(scene);
@@ -255,6 +262,7 @@ async function main(argv) {
     }
     const { host, token } = paired();
     const layout = await getLayout(host, token);
+    const id = idColumn(scenes);
     let done = 0;
     for (const scene of scenes) {
       try {
@@ -264,7 +272,7 @@ async function main(argv) {
         throw error;
       }
       done++;
-      console.log(`  ${scene.name}`);
+      console.log(`  ${id(scene)}  ${scene.name}`);
     }
     const count = scenes.length === 1 ? '1 scene' : `${scenes.length} scenes`;
     console.log(`Saved ${count} on the lights, replacing any with the same names. What’s showing hasn’t changed.`);
@@ -272,10 +280,10 @@ async function main(argv) {
   }
 
   if (command === 'forget') {
-    if (!rest.length) throw new Error(`Which scene? Run: ${CLI} forget NAME`);
+    if (!rest.length) throw new Error(`Which scene? Run: ${CLI} forget ID or NAME`);
     const { library, scene } = forgetScene(readLibrary(SCENES), rest.join(' '));
     writeLibrary(SCENES, library);
-    console.log(`Forgot “${scene.name}”. A copy saved on the lights stays there until you delete it in the Nanoleaf app.`);
+    console.log(`Forgot scene ${scene.id}, “${scene.name}”. A copy saved on the lights stays there until you delete it in the Nanoleaf app.`);
   }
 }
 

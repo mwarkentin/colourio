@@ -323,12 +323,12 @@ describe('scene library from the command line', () => {
 
   test('send --save saves it on the lights and in the library', async () => {
     const { stdout } = await cli(['send', RED_GREEN_BLUE, '--save', 'Sunset']);
-    assert.match(stdout, /Saved as “Sunset” and showing \(still\)\.\nKept “Sunset” in your scene library\. Show it again any time with: .* play Sunset\n/);
+    assert.match(stdout, /Saved as “Sunset” and showing \(still\)\.\nKept “Sunset” in your scene library as scene 1\. Show it again any time with: .* play 1\n/);
     assert.deepEqual(puts().map((b) => b.select ?? b.write.command), ['add', 'Sunset']);
     const { version, scenes: kept } = library();
     assert.equal(version, 1);
     assert.deepEqual(kept.map(({ savedAt, ...scene }) => scene), [{
-      name: 'Sunset', drift: false, cycle: 60, reverse: false, stops: ['#ff0000 0%', '#00ff00 50%', '#0000ff 100%'],
+      id: 1, name: 'Sunset', drift: false, cycle: 60, reverse: false, stops: ['#ff0000 0%', '#00ff00 50%', '#0000ff 100%'],
     }]);
     if (process.platform !== 'win32') assert.equal(statSync(scenes).mode & 0o777, 0o600);
   });
@@ -336,7 +336,7 @@ describe('scene library from the command line', () => {
   test('keep a flowing scene’s options', async () => {
     const { stdout } = await cli(['send', RED_GREEN_BLUE, '--drift', '--cycle', '30', '--reverse', '--save', 'Ocean flow']);
     assert.match(stdout, /Saved as “Ocean flow” and showing \(flowing, 30s a cycle\)\./);
-    assert.match(stdout, /Kept “Ocean flow” .* play "Ocean flow"/);
+    assert.match(stdout, /Kept “Ocean flow” in your scene library as scene 2\. .* play 2\n/);
     assert.deepEqual(puts().map((b) => b.select ?? b.write.command), ['add', 'Ocean flow']);
     const kept = library().scenes.find((s) => s.name === 'Ocean flow');
     assert.deepEqual([kept.drift, kept.cycle, kept.reverse], [true, 30, true]);
@@ -344,18 +344,21 @@ describe('scene library from the command line', () => {
 
   test('keeping a name again replaces that scene', async () => {
     const { stdout } = await cli(['send', '#000000 #ffffff', '--save', 'Dusk']);
-    assert.match(stdout, /Kept “Dusk”/);
-    assert.match((await cli(['send', '#222244 #000000', '--save', 'dusk'])).stdout, /Replaced “dusk”/);
-    const names = library().scenes.map((s) => s.name);
-    assert.deepEqual(names, ['dusk', 'Ocean flow', 'Sunset']);
-    assert.deepEqual(library().scenes[0].stops, ['#222244 0%', '#000000 100%']);
+    assert.match(stdout, /Kept “Dusk” in your scene library as scene 3\./);
+    const again = (await cli(['send', '#222244 #000000', '--save', 'dusk'])).stdout;
+    assert.match(again, /Replaced “dusk” in your scene library; it’s still scene 3\. .* play 3\n/);
+    assert.deepEqual(library().scenes.map((s) => [s.id, s.name]), [[1, 'Sunset'], [2, 'Ocean flow'], [3, 'dusk']]);
+    assert.deepEqual(library().scenes[2].stops, ['#222244 0%', '#000000 100%']);
+    assert.equal(library().nextId, 4);
   });
 
   test('list scenes, with colour previews where the terminal shows them', async () => {
     const plain = (await cli(['scenes'])).stdout;
     assert.match(plain, /^3 scenes in .*nanoleaf-scenes\.json:\n/);
-    assert.match(plain, /\n {2}dusk {8}#[0-9a-f]{6}( #[0-9a-f]{6}){4} {2}still {2}\d{4}-\d{2}-\d{2}\n/);
-    assert.match(plain, /\n {2}Ocean flow {2}.* {2}flowing, 30s a cycle, reversed {2}\d{4}/);
+    assert.match(plain, /:\n {2}1 {2}Sunset {6}#/);
+    assert.match(plain, /\n {2}2 {2}Ocean flow {2}.* {2}flowing, 30s a cycle, reversed {2}\d{4}/);
+    assert.match(plain, /\n {2}3 {2}dusk {8}#[0-9a-f]{6}( #[0-9a-f]{6}){4} {2}still {2}\d{4}-\d{2}-\d{2}\n/);
+    assert.match(plain, /play ID \(or its name\)/);
     assert.doesNotMatch(plain, /\x1b\[/);
 
     const truecolour = (await cli(['scenes'], { FORCE_COLOR: '3' })).stdout;
@@ -364,15 +367,15 @@ describe('scene library from the command line', () => {
     assert.match((await cli(['scenes'], { FORCE_COLOR: '2' })).stdout, /\x1b\[48;5;\d+m/);
   });
 
-  test('play a kept scene on whatever panels the lights have now', async () => {
+  test('play a kept scene by ID, on whatever panels the lights have now', async () => {
     device.layout = FIVE_PANELS;
-    const { stdout } = await cli(['play', 'sunset']);
+    const { stdout } = await cli(['play', '1']);
     assert.match(stdout, /5\. #[0-9a-f]{6}\nShowing “Sunset” \(still\)\./);
     assert.deepEqual(puts().map((b) => b.write.command), ['display']);
     assert.match(puts()[0].write.animData, /^5 500 1 /);
   });
 
-  test('play a flowing scene, unquoted, and save it on the lights', async () => {
+  test('play a flowing scene by name, unquoted, and save it on the lights', async () => {
     const { stdout } = await cli(['play', 'Ocean', 'flow', '--save']);
     assert.match(stdout, /Each panel flows through these 24 colours and back/);
     assert.match(stdout, /Saved “Ocean flow” on the lights and showing it \(flowing, 30s a cycle\)\./);
@@ -384,6 +387,7 @@ describe('scene library from the command line', () => {
 
   test('suggest a close name, without touching the lights', async () => {
     await assert.rejects(cli(['play', 'Sunst']), fails(/No scene called “Sunst”\. Did you mean “Sunset”\?/));
+    await assert.rejects(cli(['play', '7']), fails(/No scene with ID 7\. List your scenes with/));
     await assert.rejects(cli(['play']), fails(/Which scene\?/));
     assert.deepEqual(device.requests, []);
   });
@@ -397,22 +401,27 @@ describe('scene library from the command line', () => {
   test('refuse a name that won’t work before touching the lights', async () => {
     await assert.rejects(cli(['send', '#ff0000', '--save', '*Solid*']), fails(/used by the lights/));
     await assert.rejects(cli(['send', '#ff0000', '--save', 'x'.repeat(41)]), fails(/up to 40 characters/));
+    await assert.rejects(cli(['send', '#ff0000', '--save', '2024']), fails(/can’t be just a number/));
     assert.deepEqual(device.requests, []);
   });
 
   test('sync saves every kept scene on the lights, without changing what’s showing', async () => {
     device.layout = FIVE_PANELS;
     const { stdout } = await cli(['sync']);
-    assert.match(stdout, /Saved 3 scenes on the lights/);
+    assert.match(stdout, /^ {2}1 {2}Sunset\n {2}2 {2}Ocean flow\n {2}3 {2}dusk\nSaved 3 scenes on the lights/);
     const sent = puts();
-    assert.deepEqual(sent.map((b) => [b.write.command, b.write.animName]), [['add', 'dusk'], ['add', 'Ocean flow'], ['add', 'Sunset']]);
+    assert.deepEqual(sent.map((b) => [b.write.command, b.write.animName]), [['add', 'Sunset'], ['add', 'Ocean flow'], ['add', 'dusk']]);
     assert.ok(sent.every((b) => b.write.animData.startsWith('5 ')), 'fitted to the five panels');
   });
 
-  test('forget a scene', async () => {
-    assert.match((await cli(['forget', 'DUSK'])).stdout, /Forgot “dusk”\. A copy saved on the lights stays/);
-    assert.deepEqual(library().scenes.map((s) => s.name), ['Ocean flow', 'Sunset']);
+  test('forget a scene by ID or name, and never reuse its ID', async () => {
+    assert.match((await cli(['forget', '3'])).stdout, /Forgot scene 3, “dusk”\. A copy saved on the lights stays/);
+    assert.deepEqual(library().scenes.map((s) => s.name), ['Sunset', 'Ocean flow']);
+    await assert.rejects(cli(['forget', '3']), fails(/No scene with ID 3/));
     await assert.rejects(cli(['forget', 'dusk']), fails(/No scene called “dusk”/));
+    assert.match((await cli(['send', '#ffffff', '--save', 'Dawn'])).stdout, /as scene 4\./);
+    assert.match((await cli(['forget', 'ocean FLOW'])).stdout, /Forgot scene 2, “Ocean flow”/);
+    assert.deepEqual(library().scenes.map((s) => [s.id, s.name]), [[1, 'Sunset'], [4, 'Dawn']]);
   });
 
   test('report a damaged library, change nothing, and leave the file alone', async () => {
