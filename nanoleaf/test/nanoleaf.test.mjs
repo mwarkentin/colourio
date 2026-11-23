@@ -4,7 +4,7 @@
 
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
-import { mkdtempSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -12,8 +12,8 @@ import { after, before, beforeEach, describe, test } from 'node:test';
 import { promisify } from 'node:util';
 
 import {
-  baseUrl, buildEffect, colourAt, DRIFT_STEPS, driftFrames, getLayout, gradientColours, pair, panelSlices, parseGradient,
-  sendEffect, stillColours,
+  ansi256, baseUrl, buildEffect, colourAt, colourDepth, DRIFT_STEPS, driftFrames, getLayout, gradientColours, pair, paint,
+  panelSlices, parseGradient, sendEffect, stillColours,
 } from '../lib.mjs';
 
 const CLI = new URL('../nanoleaf.mjs', import.meta.url).pathname;
@@ -29,6 +29,12 @@ const SKYLIGHT = {
     { panelId: 4012, x: 180, y: 90, o: 0, shapeType: 31 },
     { panelId: 177, x: 360, y: 90, o: 0, shapeType: 30 },
   ],
+};
+// The same lights after adding two panels.
+const FIVE_PANELS = {
+  numPanels: 5,
+  sideLength: 0,
+  positionData: [180, 360, 540, 720, 900].map((x, i) => ({ panelId: 500 + i, x, y: 90, o: 0, shapeType: 30 })),
 };
 const RED_GREEN_BLUE = 'background: linear-gradient(90deg, #ff0000 0%, #00ff00 50%, #0000ff 100%);';
 
@@ -57,7 +63,7 @@ function fakeSkylight() {
       if (!match) return send(404);
       if (match[1] !== TOKEN) return send(401);
       if (req.method === 'GET' && match[2] === '/') return send(200, { name: 'Skylight 1A2B', model: 'NL83' });
-      if (req.method === 'GET' && match[2] === '/panelLayout/layout') return send(200, SKYLIGHT);
+      if (req.method === 'GET' && match[2] === '/panelLayout/layout') return send(200, device.layout);
       if (req.method === 'PUT' && match[2] === '/effects') return send(204);
       return send(404);
     });
@@ -71,7 +77,7 @@ before(async () => {
 });
 after(() => server.close());
 beforeEach(() => {
-  device = { pairing: true, requests: [] };
+  device = { pairing: true, requests: [], layout: SKYLIGHT };
 });
 
 // ---------------------------------------------------------------------------
@@ -283,9 +289,178 @@ describe('command line', () => {
 
     const layout = await cli('layout');
     assert.match(layout.stdout, /1\. panel 4012 .*\n.*2\. panel 177 .*\n.*3\. panel 9031/);
+
+    // Options can still come before the command.
+    assert.match((await cli('--cycle', '30', '--drift', 'send', '#ff0000 #0000ff')).stdout, /flowing, 30s a cycle/);
   });
 
   test('refuse a silly cycle', async () => {
     await assert.rejects(cli('send', '#ff0000', '--drift', '--cycle', '1'), (error) => /--cycle/.test(error.stderr));
+  });
+});
+
+describe('scene library from the command line', () => {
+  const run = promisify(execFile);
+  const dir = mkdtempSync(join(tmpdir(), 'colourio-nanoleaf-'));
+  const config = join(dir, 'nanoleaf.json');
+  // The library sits next to the pairing file unless told otherwise.
+  const scenes = join(dir, 'nanoleaf-scenes.json');
+  const { FORCE_COLOR, NO_COLOR, ...env } = process.env;
+  const cli = (args, extra = {}) => run(process.execPath, [CLI, ...args], { env: { ...env, COLOURIO_NANOLEAF_CONFIG: config, ...extra } });
+  const library = () => JSON.parse(readFileSync(scenes, 'utf8'));
+  const puts = () => device.requests.filter((r) => r.method === 'PUT').map((r) => r.body);
+  const fails = (pattern) => (error) => {
+    assert.match(error.stderr, pattern);
+    return true;
+  };
+
+  before(() => writeFileSync(config, JSON.stringify({ host, token: TOKEN })));
+
+  test('start with an empty library', async () => {
+    assert.match((await cli(['scenes'])).stdout, /No scenes in your library yet/);
+    assert.equal(existsSync(scenes), false);
+  });
+
+  test('send --save saves it on the lights and in the library', async () => {
+    const { stdout } = await cli(['send', RED_GREEN_BLUE, '--save', 'Sunset']);
+    assert.match(stdout, /Saved as “Sunset” and showing \(still\)\.\nKept “Sunset” in your scene library as scene 1\. Show it again any time with: .* play 1\n/);
+    assert.deepEqual(puts().map((b) => b.select ?? b.write.command), ['add', 'Sunset']);
+    const { version, scenes: kept } = library();
+    assert.equal(version, 1);
+    assert.deepEqual(kept.map(({ savedAt, ...scene }) => scene), [{
+      id: 1, name: 'Sunset', drift: false, cycle: 60, reverse: false, stops: ['#ff0000 0%', '#00ff00 50%', '#0000ff 100%'],
+    }]);
+    if (process.platform !== 'win32') assert.equal(statSync(scenes).mode & 0o777, 0o600);
+  });
+
+  test('keep a flowing scene’s options', async () => {
+    const { stdout } = await cli(['send', RED_GREEN_BLUE, '--drift', '--cycle', '30', '--reverse', '--save', 'Ocean flow']);
+    assert.match(stdout, /Saved as “Ocean flow” and showing \(flowing, 30s a cycle\)\./);
+    assert.match(stdout, /Kept “Ocean flow” in your scene library as scene 2\. .* play 2\n/);
+    assert.deepEqual(puts().map((b) => b.select ?? b.write.command), ['add', 'Ocean flow']);
+    const kept = library().scenes.find((s) => s.name === 'Ocean flow');
+    assert.deepEqual([kept.drift, kept.cycle, kept.reverse], [true, 30, true]);
+  });
+
+  test('keeping a name again replaces that scene', async () => {
+    const { stdout } = await cli(['send', '#000000 #ffffff', '--save', 'Dusk']);
+    assert.match(stdout, /Kept “Dusk” in your scene library as scene 3\./);
+    const again = (await cli(['send', '#222244 #000000', '--save', 'dusk'])).stdout;
+    assert.match(again, /Replaced “dusk” in your scene library; it’s still scene 3\. .* play 3\n/);
+    assert.deepEqual(library().scenes.map((s) => [s.id, s.name]), [[1, 'Sunset'], [2, 'Ocean flow'], [3, 'dusk']]);
+    assert.deepEqual(library().scenes[2].stops, ['#222244 0%', '#000000 100%']);
+    assert.equal(library().nextId, 4);
+  });
+
+  test('list scenes, with colour previews where the terminal shows them', async () => {
+    const plain = (await cli(['scenes'])).stdout;
+    assert.match(plain, /^3 scenes in .*nanoleaf-scenes\.json:\n/);
+    assert.match(plain, /:\n {2}1 {2}Sunset {6}#/);
+    assert.match(plain, /\n {2}2 {2}Ocean flow {2}.* {2}flowing, 30s a cycle, reversed {2}\d{4}/);
+    assert.match(plain, /\n {2}3 {2}dusk {8}#[0-9a-f]{6}( #[0-9a-f]{6}){4} {2}still {2}\d{4}-\d{2}-\d{2}\n/);
+    assert.match(plain, /play ID \(or its name\)/);
+    assert.doesNotMatch(plain, /\x1b\[/);
+
+    const truecolour = (await cli(['scenes'], { FORCE_COLOR: '3' })).stdout;
+    assert.match(truecolour, /\x1b\[48;2;\d+;\d+;\d+m \x1b\[0m/);
+    assert.equal(truecolour.split('\n')[3].match(/\x1b\[48;2;/g).length, DRIFT_STEPS, 'one block per colour');
+    assert.match((await cli(['scenes'], { FORCE_COLOR: '2' })).stdout, /\x1b\[48;5;\d+m/);
+  });
+
+  test('play a kept scene by ID, on whatever panels the lights have now', async () => {
+    device.layout = FIVE_PANELS;
+    const { stdout } = await cli(['play', '1']);
+    assert.match(stdout, /5\. #[0-9a-f]{6}\nShowing “Sunset” \(still\)\./);
+    assert.deepEqual(puts().map((b) => b.write.command), ['display']);
+    assert.match(puts()[0].write.animData, /^5 500 1 /);
+  });
+
+  test('play a flowing scene by name, unquoted, and save it on the lights', async () => {
+    const { stdout } = await cli(['play', 'Ocean', 'flow', '--save']);
+    assert.match(stdout, /Each panel flows through these 24 colours and back/);
+    assert.match(stdout, /Saved “Ocean flow” on the lights and showing it \(flowing, 30s a cycle\)\./);
+    const [add, select] = puts();
+    assert.equal(add.write.animType, 'custom');
+    assert.equal(add.write.animName, 'Ocean flow');
+    assert.deepEqual(select, { select: 'Ocean flow' });
+  });
+
+  test('suggest a close name, without touching the lights', async () => {
+    await assert.rejects(cli(['play', 'Sunst']), fails(/No scene called “Sunst”\. Did you mean “Sunset”\?/));
+    await assert.rejects(cli(['play', '7']), fails(/No scene with ID 7\. List your scenes with/));
+    await assert.rejects(cli(['play']), fails(/Which scene\?/));
+    assert.deepEqual(device.requests, []);
+  });
+
+  test('refuse options that only send takes', async () => {
+    await assert.rejects(cli(['play', 'Sunset', '--drift']), fails(/“play” doesn’t take --drift/));
+    await assert.rejects(cli(['scenes', '--reverse']), fails(/“scenes” doesn’t take --reverse/));
+    assert.deepEqual(device.requests, []);
+  });
+
+  test('refuse a name that won’t work before touching the lights', async () => {
+    await assert.rejects(cli(['send', '#ff0000', '--save', '*Solid*']), fails(/used by the lights/));
+    await assert.rejects(cli(['send', '#ff0000', '--save', 'x'.repeat(41)]), fails(/up to 40 characters/));
+    await assert.rejects(cli(['send', '#ff0000', '--save', '2024']), fails(/can’t be just a number/));
+    assert.deepEqual(device.requests, []);
+  });
+
+  test('sync saves every kept scene on the lights, without changing what’s showing', async () => {
+    device.layout = FIVE_PANELS;
+    const { stdout } = await cli(['sync']);
+    assert.match(stdout, /^ {2}1 {2}Sunset\n {2}2 {2}Ocean flow\n {2}3 {2}dusk\nSaved 3 scenes on the lights/);
+    const sent = puts();
+    assert.deepEqual(sent.map((b) => [b.write.command, b.write.animName]), [['add', 'Sunset'], ['add', 'Ocean flow'], ['add', 'dusk']]);
+    assert.ok(sent.every((b) => b.write.animData.startsWith('5 ')), 'fitted to the five panels');
+  });
+
+  test('forget a scene by ID or name, and never reuse its ID', async () => {
+    assert.match((await cli(['forget', '3'])).stdout, /Forgot scene 3, “dusk”\. A copy saved on the lights stays/);
+    assert.deepEqual(library().scenes.map((s) => s.name), ['Sunset', 'Ocean flow']);
+    await assert.rejects(cli(['forget', '3']), fails(/No scene with ID 3/));
+    await assert.rejects(cli(['forget', 'dusk']), fails(/No scene called “dusk”/));
+    assert.match((await cli(['send', '#ffffff', '--save', 'Dawn'])).stdout, /as scene 4\./);
+    assert.match((await cli(['forget', 'ocean FLOW'])).stdout, /Forgot scene 2, “Ocean flow”/);
+    assert.deepEqual(library().scenes.map((s) => [s.id, s.name]), [[1, 'Sunset'], [4, 'Dawn']]);
+  });
+
+  test('report a damaged library, change nothing, and leave the file alone', async () => {
+    const other = join(dir, 'damaged.json');
+    writeFileSync(other, '{"version": 1, "scenes": [');
+    const extra = { COLOURIO_NANOLEAF_SCENES: other };
+    for (const args of [['scenes'], ['play', 'Sunset'], ['sync'], ['forget', 'Sunset'], ['send', '#ff0000', '--save', 'New']]) {
+      await assert.rejects(cli(args, extra), fails(/damaged\.json isn’t valid JSON .* Nothing was changed/), args.join(' '));
+    }
+    assert.equal(readFileSync(other, 'utf8'), '{"version": 1, "scenes": [');
+    assert.deepEqual(device.requests, []);
+  });
+
+  test('keep working without the library', async () => {
+    const { stdout } = await cli(['send', '#ff0000'], { COLOURIO_NANOLEAF_SCENES: join(dir, 'damaged.json') });
+    assert.match(stdout, /Showing \(still\)/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Colour previews
+// ---------------------------------------------------------------------------
+
+describe('terminal previews', () => {
+  test('use the terminal’s own colour depth, and FORCE_COLOR when piped', () => {
+    assert.equal(colourDepth({ isTTY: true, getColorDepth: () => 24 }, {}), 24);
+    assert.equal(colourDepth({ isTTY: false }, {}), 1);
+    assert.equal(colourDepth({ isTTY: false }, { FORCE_COLOR: '3' }), 24);
+    assert.equal(colourDepth({ isTTY: false }, { FORCE_COLOR: '2' }), 8);
+    assert.equal(colourDepth({ isTTY: false }, { FORCE_COLOR: '0' }), 1);
+  });
+
+  test('paint true colour, the nearest of 256 colours, or nothing', () => {
+    const orange = { r: 255, g: 136, b: 0 };
+    assert.equal(paint(orange, 2, 24), '\x1b[48;2;255;136;0m  \x1b[0m');
+    assert.equal(paint(orange, 2, 8), '\x1b[48;5;208m  \x1b[0m');
+    assert.equal(paint(orange, 2, 4), '');
+    assert.equal(ansi256({ r: 255, g: 0, b: 0 }), 196);
+    assert.equal(ansi256({ r: 255, g: 255, b: 255 }), 231);
+    assert.equal(ansi256({ r: 128, g: 128, b: 128 }), 244);
   });
 });
