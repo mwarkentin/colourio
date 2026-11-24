@@ -15,11 +15,10 @@
             // art; links to your own Create-a-Product pages without it can
             // earn the Self-Promotion rate (40%). Sent as rf= only if set.
             ambassadorId: '',
-            // Off by default: tracking codes feed your referral history, so
-            // tc= may also mark links as cross-promotion. Set one (e.g.
-            // 'colourio') only once Zazzle confirms it keeps the
-            // Self-Promotion rate.
-            trackingCode: '',
+            // Sent as tc=, so referral reports show which sales came from
+            // colourio. Zazzle Developer Support confirmed (Nov 2026) that tc
+            // codes don't change the referral type.
+            trackingCode: 'colourio',
             domain: 'zazzle.com'
         },
         // Zazzle fetches the print file from a public URL, so it's uploaded

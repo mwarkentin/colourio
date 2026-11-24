@@ -370,7 +370,11 @@ describe('colourio in a browser', { skip: !playwright && !process.env.CI && 'Pla
     await page.click('#printBtn');
     await page.click('#printGoBtn');
     await page.waitForSelector('html[data-print="ready"]', { timeout: 30000 });
-    assert.match(await page.getAttribute('#printOpen', 'href'), /t_image1_iid=https%3A%2F%2Fprints\.test%2Fv1%2Fprints%2Fa\.png/);
+    const href = await page.getAttribute('#printOpen', 'href');
+    assert.match(href, /t_image1_iid=https%3A%2F%2Fprints\.test%2Fv1%2Fprints%2Fa\.png/);
+    // Self-Promotion links: a tracking code is fine, an Ambassador ID isn't.
+    assert.equal(new URL(href).searchParams.get('tc'), 'colourio');
+    assert.equal(new URL(href).searchParams.has('rf'), false);
     assert.equal(await page.isVisible('#printOpen'), true);
     assert.equal(await page.isVisible('#printGoBtn'), false);
   });
